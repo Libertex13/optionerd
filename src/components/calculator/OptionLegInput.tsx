@@ -73,9 +73,9 @@ export function OptionLegInput({
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+    <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
+      <div className="space-y-2.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Direction
         </Label>
         <Select value={positionType} onValueChange={(v) => v && onPositionTypeChange(v as PositionType)}>
@@ -90,7 +90,7 @@ export function OptionLegInput({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Type
         </Label>
         <Select value={optionType} onValueChange={(v) => v && onOptionTypeChange(v as OptionType)}>
@@ -105,7 +105,7 @@ export function OptionLegInput({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Expiration
         </Label>
         <Select value={selectedExpiry} onValueChange={(v) => v && handleExpirySelect(v)}>
@@ -123,7 +123,7 @@ export function OptionLegInput({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Strike
         </Label>
         <Select

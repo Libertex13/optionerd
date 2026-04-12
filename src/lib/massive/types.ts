@@ -22,21 +22,35 @@ export interface MassiveSnapshotResponse {
   status: string;
   request_id: string;
   results: MassiveOptionSnapshot[];
+  next_url?: string;
+}
+
+export interface MassivePrevDayResponse {
+  ticker: string;
+  status: string;
+  results?: {
+    c: number;
+    o: number;
+    h: number;
+    l: number;
+    v: number;
+    t: number;
+  }[];
 }
 
 export interface MassiveOptionSnapshot {
-  break_even_price: number;
-  day: {
-    change: number;
-    change_percent: number;
-    close: number;
-    high: number;
-    last_updated: number;
-    low: number;
-    open: number;
-    previous_close: number;
-    volume: number;
-    vwap: number;
+  break_even_price?: number;
+  day?: {
+    change?: number;
+    change_percent?: number;
+    close?: number;
+    high?: number;
+    last_updated?: number;
+    low?: number;
+    open?: number;
+    previous_close?: number;
+    volume?: number;
+    vwap?: number;
   };
   details: {
     contract_type: "call" | "put";
@@ -47,28 +61,28 @@ export interface MassiveOptionSnapshot {
     ticker: string;
   };
   greeks?: {
-    delta: number;
-    gamma: number;
-    theta: number;
-    vega: number;
+    delta?: number;
+    gamma?: number;
+    theta?: number;
+    vega?: number;
   };
   implied_volatility?: number;
-  last_quote: {
-    ask: number;
-    ask_size: number;
-    bid: number;
-    bid_size: number;
-    last_updated: number;
-    midpoint: number;
-    timeframe: string;
+  last_quote?: {
+    ask?: number;
+    ask_size?: number;
+    bid?: number;
+    bid_size?: number;
+    last_updated?: number;
+    midpoint?: number;
+    timeframe?: string;
   };
-  open_interest: number;
-  underlying_asset: {
-    change_to_break_even: number;
-    last_updated: number;
-    price: number;
-    ticker: string;
-    timeframe: string;
+  open_interest?: number;
+  underlying_asset?: {
+    change_to_break_even?: number;
+    last_updated?: number;
+    price?: number;
+    ticker?: string;
+    timeframe?: string;
   };
 }
 

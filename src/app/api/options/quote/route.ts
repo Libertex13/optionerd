@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStockSnapshot } from "@/lib/massive/client";
+import { getPrevDayClose } from "@/lib/massive/client";
 import type { StockQuote } from "@/types/market";
 
 export async function GET(request: Request) {
@@ -9,23 +9,22 @@ export async function GET(request: Request) {
   if (!ticker || !/^[A-Z]{1,5}$/.test(ticker)) {
     return NextResponse.json(
       { error: "Invalid or missing ticker parameter" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   try {
-    const data = await getStockSnapshot(ticker);
-    const { ticker: t } = data;
+    const price = await getPrevDayClose(ticker);
 
     const quote: StockQuote = {
-      ticker: t.ticker,
-      name: t.name,
-      price: t.lastTrade.p,
-      change: t.todaysChange,
-      changePercent: t.todaysChangePerc,
-      volume: t.day.v,
-      previousClose: t.prevDay.c,
-      timestamp: t.updated,
+      ticker,
+      name: "",
+      price,
+      change: 0,
+      changePercent: 0,
+      volume: 0,
+      previousClose: price,
+      timestamp: Date.now(),
     };
 
     return NextResponse.json(quote, {
@@ -37,7 +36,7 @@ export async function GET(request: Request) {
     console.error("Stock quote error:", error);
     return NextResponse.json(
       { error: "Failed to fetch stock quote" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

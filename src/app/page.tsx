@@ -3,45 +3,39 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
-      {/* Hero Section */}
-      <section className="mb-12 text-center">
-        <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-          Free Options Profit Calculator
+    <div className="mx-auto max-w-6xl px-3 py-6">
+      {/* Hero */}
+      <section className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+          Options Profit Calculator
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          Calculate options P&L, visualize payoff diagrams, and analyze Greeks — all for free.
-          Built by an options trader, for options traders.
+        <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+          Payoff diagrams, Greeks, and P&L analysis. Free, fast, no signup.
         </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
-          <Link
-            href="/calculator/long-call"
-            className="rounded-full border border-border px-4 py-2 hover:bg-accent transition-colors"
-          >
-            Long Call Calculator
-          </Link>
-          <Link
-            href="/calculator/long-put"
-            className="rounded-full border border-border px-4 py-2 hover:bg-accent transition-colors"
-          >
-            Long Put Calculator
-          </Link>
-          <Link
-            href="/calculator/covered-call"
-            className="rounded-full border border-border px-4 py-2 hover:bg-accent transition-colors"
-          >
-            Covered Call Calculator
-          </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {[
+            { href: "/calculator/long-call", label: "Long Call" },
+            { href: "/calculator/long-put", label: "Long Put" },
+            { href: "/calculator/covered-call", label: "Covered Call" },
+          ].map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-sm border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              {label}
+            </Link>
+          ))}
         </div>
       </section>
 
       {/* Calculator */}
       <OptionsCalculator />
 
-      {/* SEO Content Section */}
-      <section className="mx-auto mt-16 max-w-3xl space-y-8 text-muted-foreground">
+      {/* SEO Content */}
+      <section className="mx-auto mt-12 max-w-3xl space-y-6 text-sm text-muted-foreground">
         <div>
-          <h2 className="mb-3 text-2xl font-bold text-foreground">
+          <h2 className="mb-2 text-base font-bold text-foreground">
             What is an Options Profit Calculator?
           </h2>
           <p>
@@ -52,10 +46,10 @@ export default function HomePage() {
           </p>
         </div>
         <div>
-          <h2 className="mb-3 text-2xl font-bold text-foreground">
+          <h2 className="mb-2 text-base font-bold text-foreground">
             How to Use This Calculator
           </h2>
-          <ol className="list-decimal space-y-2 pl-6">
+          <ol className="list-decimal space-y-1 pl-5">
             <li>
               <strong>Search for a ticker</strong> — Enter any US stock symbol (e.g., AAPL, TSLA,
               SPY) to load the options chain.
@@ -71,7 +65,7 @@ export default function HomePage() {
           </ol>
         </div>
         <div>
-          <h2 className="mb-3 text-2xl font-bold text-foreground">
+          <h2 className="mb-2 text-base font-bold text-foreground">
             Understanding the Greeks
           </h2>
           <p>

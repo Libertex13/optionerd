@@ -8,7 +8,7 @@ The product is built by an ITPM-trained options trader who actually uses these t
 
 ### Brand
 - **Primary domain**: optionerd.com
-- **Brand name**: Option Nerd / optionerd
+- **Brand name**: optioNerd / optionerd
 - **Redirect domains**: optionspro.fit → optionerd.com, optionsprofitcalc.org → optionerd.com
 - **Tone**: Smart, nerdy, approachable. Finance expertise without the corporate feel. Think "the friend who actually understands options and explains them clearly."
 
@@ -126,7 +126,7 @@ src/
 The goal is to get a **single functional page live on Vercel** as fast as possible so Google starts indexing. Ship ugly, ship fast, iterate.
 
 ### What ships in Phase 1:
-1. **Landing page** at `/` — hero section explaining what Option Nerd is, with the calculator embedded or linked
+1. **Landing page** at `/` — hero section explaining what optioNerd is, with the calculator embedded or linked
 2. **Single-leg calculator** — user enters ticker, selects a call or put from the chain, sees:
    - Current option price (from Massive API)
    - Payoff diagram at expiration

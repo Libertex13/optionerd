@@ -66,27 +66,26 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
     <div ref={containerRef} className="relative">
       <Input
         type="text"
-        placeholder="Search ticker (e.g. AAPL, TSLA, SPY)..."
+        placeholder="Search ticker (AAPL, TSLA, SPY)..."
         value={query}
         onChange={(e) => handleInputChange(e.target.value)}
         onFocus={() => results.length > 0 && setIsOpen(true)}
-        className="font-mono text-lg h-12"
       />
       {isLoading && (
-        <div className="absolute right-3 top-3.5 text-sm text-muted-foreground">
-          Loading...
+        <div className="absolute right-2.5 top-2 text-xs text-muted-foreground font-mono">
+          ...
         </div>
       )}
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg">
+        <div className="absolute z-50 mt-0.5 w-full rounded-md border border-border bg-popover shadow-sm">
           {results.map((result) => (
             <button
               key={result.ticker}
               onClick={() => handleSelect(result.ticker)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent transition-colors first:rounded-t-md last:rounded-b-md"
+              className="flex w-full items-center justify-between px-2.5 py-1.5 text-left hover:bg-accent transition-colors first:rounded-t-md last:rounded-b-md"
             >
-              <span className="font-mono font-bold">{result.ticker}</span>
-              <span className="ml-4 truncate text-sm text-muted-foreground">
+              <span className="font-mono text-xs font-bold">{result.ticker}</span>
+              <span className="ml-3 truncate text-xs text-muted-foreground">
                 {result.name}
               </span>
             </button>

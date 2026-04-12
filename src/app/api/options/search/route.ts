@@ -16,12 +16,27 @@ export async function GET(request: Request) {
   try {
     const data = await searchTickers(query);
 
-    const results: TickerSearchResult[] = data.results.map((r) => ({
-      ticker: r.ticker,
-      name: r.name,
-      market: r.market,
-      type: r.type,
-    }));
+    const upperQuery = query.toUpperCase();
+
+    const results: TickerSearchResult[] = data.results
+      .map((r) => ({
+        ticker: r.ticker,
+        name: r.name,
+        market: r.market,
+        type: r.type,
+      }))
+      .sort((a, b) => {
+        // Exact match first
+        if (a.ticker === upperQuery && b.ticker !== upperQuery) return -1;
+        if (b.ticker === upperQuery && a.ticker !== upperQuery) return 1;
+        // Then prefix matches
+        const aPrefix = a.ticker.startsWith(upperQuery);
+        const bPrefix = b.ticker.startsWith(upperQuery);
+        if (aPrefix && !bPrefix) return -1;
+        if (bPrefix && !aPrefix) return 1;
+        // Then alphabetical
+        return a.ticker.localeCompare(b.ticker);
+      });
 
     return NextResponse.json(results, {
       headers: {

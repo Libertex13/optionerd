@@ -1,7 +1,7 @@
 import type {
   MassiveSnapshotResponse,
-  MassiveStockSnapshotResponse,
   MassiveTickerSearchResponse,
+  MassivePrevDayResponse,
 } from "./types";
 
 const BASE_URL = "https://api.polygon.io";
@@ -46,28 +46,46 @@ export async function searchTickers(
     search: query,
     active: "true",
     market: "stocks",
+    type: "CS",
     limit: limit.toString(),
   });
 }
 
 /**
  * Get options chain snapshot for an underlying ticker.
+ * Fetches all pages to get the complete chain.
  */
 export async function getOptionsSnapshot(
   underlyingTicker: string
 ): Promise<MassiveSnapshotResponse> {
-  return fetchMassive<MassiveSnapshotResponse>(
-    `/v3/snapshot/options/${underlyingTicker}`
+  const firstPage = await fetchMassive<MassiveSnapshotResponse>(
+    `/v3/snapshot/options/${underlyingTicker}`,
+    { limit: "250" }
   );
+
+  const allResults = [...(firstPage.results ?? [])];
+
+  // Follow pagination
+  let nextUrl = firstPage.next_url;
+  while (nextUrl) {
+    const separator = nextUrl.includes("?") ? "&" : "?";
+    const pageUrl = `${nextUrl}${separator}apiKey=${getApiKey()}`;
+    const response = await fetch(pageUrl, { next: { revalidate: 300 } });
+    if (!response.ok) break;
+    const page = (await response.json()) as MassiveSnapshotResponse;
+    allResults.push(...(page.results ?? []));
+    nextUrl = page.next_url;
+  }
+
+  return { ...firstPage, results: allResults };
 }
 
 /**
- * Get stock quote snapshot.
+ * Get previous day's closing price for a ticker.
  */
-export async function getStockSnapshot(
-  ticker: string
-): Promise<MassiveStockSnapshotResponse> {
-  return fetchMassive<MassiveStockSnapshotResponse>(
-    `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`
+export async function getPrevDayClose(ticker: string): Promise<number> {
+  const data = await fetchMassive<MassivePrevDayResponse>(
+    `/v2/aggs/ticker/${ticker}/prev`
   );
+  return data.results?.[0]?.c ?? 0;
 }
