@@ -289,6 +289,7 @@ SUPABASE_SERVICE_ROLE_KEY=xxx
 ## Git Conventions
 
 - Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `docs:`)
+- **NEVER add "Co-Authored-By" or any AI attribution to commit messages**
 - Branch from `main` for features: `feat/payoff-diagram`, `feat/ticker-search`
 - No direct pushes to `main` — use PRs even when solo (builds good habits)
 - Keep commits atomic and focused

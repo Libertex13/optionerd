@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   return (
@@ -21,6 +22,8 @@ export function Header() {
           <Link href="/calculator/covered-call" className="hover:text-foreground transition-colors">
             Covered Call
           </Link>
+          <span className="h-3 w-px bg-border" />
+          <ThemeToggle />
         </nav>
       </div>
     </header>
