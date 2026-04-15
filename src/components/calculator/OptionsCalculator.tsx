@@ -11,8 +11,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { TickerSearch } from "./TickerSearch";
-import { ExpiryTabs } from "./ExpiryTabs";
-import { OptionChainTable } from "./OptionChainTable";
 import { PayoffDiagram } from "./PayoffDiagram";
 import { GreeksDisplay } from "./GreeksDisplay";
 import type { OptionChain, OptionContract } from "@/types/market";
@@ -53,15 +51,11 @@ export function OptionsCalculator({
   const [chain, setChain] = useState<OptionChain | null>(null);
   const [isLoadingChain, setIsLoadingChain] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
-  const [selectedExpiry, setSelectedExpiry] = useState("");
-  const [optionType, setOptionType] = useState<OptionType>(defaultOptionType);
-  const [positionType, setPositionType] =
-    useState<PositionType>(defaultPositionType);
   const [legs, setLegs] = useState<SelectedLeg[]>([]);
-  const [quantity, setQuantity] = useState(1);
-  const [showChainTable, setShowChainTable] = useState(false);
-  // For chain table browsing — separate from the quick-select expiry
-  const [chainExpiry, setChainExpiry] = useState("");
+  const [activeLegIndex, setActiveLegIndex] = useState(0);
+  const [priceTarget, setPriceTarget] = useState<string>("");
+
+  const activeLeg = legs[activeLegIndex] ?? null;
 
   const findAtmContract = useCallback(
     (data: OptionChain, expiry: string, type: OptionType) => {
@@ -118,7 +112,7 @@ export function OptionsCalculator({
       expiry: string,
       qty: number = 1,
     ): SelectedLeg => ({
-      id: `${contract.contractSymbol}-${pType}`,
+      id: `${contract.contractSymbol}-${pType}-${Date.now()}`,
       contract,
       optionType: oType,
       positionType: pType,
@@ -128,15 +122,18 @@ export function OptionsCalculator({
     [getPremium],
   );
 
-  const updateLegQuantity = (id: string, qty: number) => {
-    const clamped = Math.max(1, Math.min(9999, qty));
-    setLegs((prev) => prev.map((l) => l.id === id ? { ...l, quantity: clamped } : l));
+  const getDefaultExpiry = (data: OptionChain) => {
+    if (data.expirations.length === 0) return null;
+    return data.expirations.length > 1 && data.expirations[0].daysToExpiry <= 1
+      ? data.expirations[1]
+      : data.expirations[0];
   };
 
   const handleTickerSelect = async (ticker: string) => {
     setIsLoadingChain(true);
     setChainError(null);
     setLegs([]);
+    setActiveLegIndex(0);
 
     try {
       const response = await fetch(`/api/options/chain?ticker=${ticker}`);
@@ -145,19 +142,23 @@ export function OptionsCalculator({
       const data: OptionChain = await response.json();
       setChain(data);
 
-      if (data.expirations.length > 0) {
-        const expiry =
-          data.expirations.length > 1 && data.expirations[0].daysToExpiry <= 1
-            ? data.expirations[1]
-            : data.expirations[0];
-        setSelectedExpiry(expiry.expirationDate);
-        setChainExpiry(expiry.expirationDate);
-
-        // Pre-select ATM contract as first leg
-        const atm = findAtmContract(data, expiry.expirationDate, optionType);
+      const expiry = getDefaultExpiry(data);
+      if (expiry) {
+        const atm = findAtmContract(
+          data,
+          expiry.expirationDate,
+          defaultOptionType,
+        );
         if (atm) {
           setLegs([
-            makeLeg(atm, optionType, positionType, data, expiry.expirationDate, quantity),
+            makeLeg(
+              atm,
+              defaultOptionType,
+              defaultPositionType,
+              data,
+              expiry.expirationDate,
+              1,
+            ),
           ]);
         }
       }
@@ -168,126 +169,128 @@ export function OptionsCalculator({
     }
   };
 
-  // Quick-select handlers update the first (primary) leg
+  // All dropdown handlers update the ACTIVE leg
   const handleExpiryChange = (expiry: string) => {
-    setSelectedExpiry(expiry);
-    if (chain) {
-      const atm = findAtmContract(chain, expiry, optionType);
-      if (atm) {
-        const newLeg = makeLeg(atm, optionType, positionType, chain, expiry, quantity);
-        setLegs((prev) =>
-          prev.length > 0 ? [newLeg, ...prev.slice(1)] : [newLeg],
-        );
-      }
+    if (!chain || !activeLeg) return;
+    const atm = findAtmContract(chain, expiry, activeLeg.optionType);
+    if (atm) {
+      const updated = makeLeg(
+        atm,
+        activeLeg.optionType,
+        activeLeg.positionType,
+        chain,
+        expiry,
+        activeLeg.quantity,
+      );
+      setLegs((prev) =>
+        prev.map((l, i) => (i === activeLegIndex ? updated : l)),
+      );
     }
   };
 
   const handleOptionTypeChange = (type: OptionType) => {
-    setOptionType(type);
-    if (chain && selectedExpiry) {
-      const atm = findAtmContract(chain, selectedExpiry, type);
-      if (atm) {
-        const newLeg = makeLeg(atm, type, positionType, chain, selectedExpiry, quantity);
-        setLegs((prev) =>
-          prev.length > 0 ? [newLeg, ...prev.slice(1)] : [newLeg],
-        );
-      }
+    if (!chain || !activeLeg) return;
+    const expiry = activeLeg.contract.expirationDate;
+    const atm = findAtmContract(chain, expiry, type);
+    if (atm) {
+      const updated = makeLeg(
+        atm,
+        type,
+        activeLeg.positionType,
+        chain,
+        expiry,
+        activeLeg.quantity,
+      );
+      setLegs((prev) =>
+        prev.map((l, i) => (i === activeLegIndex ? updated : l)),
+      );
     }
   };
 
   const handlePositionTypeChange = (pType: PositionType) => {
-    setPositionType(pType);
+    if (!activeLeg) return;
     setLegs((prev) =>
-      prev.length > 0
-        ? [
-            {
-              ...prev[0],
-              positionType: pType,
-              id: `${prev[0].contract.contractSymbol}-${pType}`,
-            },
-            ...prev.slice(1),
-          ]
-        : prev,
-    );
-  };
-
-  const handleQuantityChange = (qty: number) => {
-    const clamped = Math.max(1, Math.min(9999, qty));
-    setQuantity(clamped);
-    // Update primary leg quantity
-    setLegs((prev) =>
-      prev.length > 0 ? [{ ...prev[0], quantity: clamped }, ...prev.slice(1)] : prev,
+      prev.map((l, i) =>
+        i === activeLegIndex
+          ? { ...l, positionType: pType, id: `${l.contract.contractSymbol}-${pType}-${Date.now()}` }
+          : l,
+      ),
     );
   };
 
   const handleStrikeChange = (strikeStr: string) => {
-    if (!chain) return;
+    if (!chain || !activeLeg) return;
     const strike = parseFloat(strikeStr);
+    const expiry = activeLeg.contract.expirationDate;
     const expiryData = chain.expirations.find(
-      (e) => e.expirationDate === selectedExpiry,
+      (e) => e.expirationDate === expiry,
     );
     if (!expiryData) return;
     const contracts =
-      optionType === "call" ? expiryData.calls : expiryData.puts;
+      activeLeg.optionType === "call" ? expiryData.calls : expiryData.puts;
     const contract = contracts.find((c) => c.strikePrice === strike);
     if (contract) {
-      const newLeg = makeLeg(
+      const updated = makeLeg(
         contract,
-        optionType,
-        positionType,
+        activeLeg.optionType,
+        activeLeg.positionType,
         chain,
-        selectedExpiry,
-        quantity,
+        expiry,
+        activeLeg.quantity,
       );
       setLegs((prev) =>
-        prev.length > 0 ? [newLeg, ...prev.slice(1)] : [newLeg],
+        prev.map((l, i) => (i === activeLegIndex ? updated : l)),
       );
     }
   };
 
-  // Chain table adds a NEW leg to the position
-  const handleChainAddLeg = (contract: OptionContract) => {
+  const handleQuantityChange = (qty: number) => {
+    const clamped = Math.max(1, Math.min(9999, qty));
+    setLegs((prev) =>
+      prev.map((l, i) =>
+        i === activeLegIndex ? { ...l, quantity: clamped } : l,
+      ),
+    );
+  };
+
+  const addLeg = () => {
     if (!chain) return;
-    const newLeg = makeLeg(
-      contract,
-      contract.optionType,
-      positionType,
-      chain,
-      chainExpiry,
-      quantity,
-    );
-    // Check if already in legs
-    const exists = legs.find(
-      (l) =>
-        l.contract.contractSymbol === contract.contractSymbol &&
-        l.positionType === positionType,
-    );
-    if (exists) return;
+    // New leg: ATM call, long, first decent expiry
+    const expiry = getDefaultExpiry(chain);
+    if (!expiry) return;
+    const atm = findAtmContract(chain, expiry.expirationDate, "call");
+    if (!atm) return;
+    const newLeg = makeLeg(atm, "call", "long", chain, expiry.expirationDate, 1);
     setLegs((prev) => [...prev, newLeg]);
+    setActiveLegIndex(legs.length); // select the new leg
   };
 
-  const removeLeg = (id: string) => {
-    setLegs((prev) => prev.filter((l) => l.id !== id));
+  const removeLeg = (index: number) => {
+    setLegs((prev) => prev.filter((_, i) => i !== index));
+    // Adjust active index
+    if (activeLegIndex >= legs.length - 1) {
+      setActiveLegIndex(Math.max(0, legs.length - 2));
+    } else if (index < activeLegIndex) {
+      setActiveLegIndex(activeLegIndex - 1);
+    }
   };
 
-  const currentExpiry = chain?.expirations.find(
-    (e) => e.expirationDate === selectedExpiry,
-  );
-  const chainExpiryData = chain?.expirations.find(
-    (e) => e.expirationDate === chainExpiry,
-  );
+  // Derived values for the active leg's dropdowns
+  const activeExpiry = activeLeg?.contract.expirationDate ?? "";
+  const activeOptionType = activeLeg?.optionType ?? defaultOptionType;
+  const activePositionType = activeLeg?.positionType ?? defaultPositionType;
 
-  const currentContracts = currentExpiry
-    ? optionType === "call"
-      ? currentExpiry.calls
-      : currentExpiry.puts
-    : [];
-
-  // Primary leg (first) for Greeks display
-  const primaryLeg = legs[0] ?? null;
+  const activeContracts = useMemo(() => {
+    if (!chain || !activeExpiry) return [];
+    const expiryData = chain.expirations.find(
+      (e) => e.expirationDate === activeExpiry,
+    );
+    if (!expiryData) return [];
+    return activeOptionType === "call" ? expiryData.calls : expiryData.puts;
+  }, [chain, activeExpiry, activeOptionType]);
 
   // Compute payoff from ALL legs
-  const { payoffData, breakEvenPoints, maxProfit, maxLoss, pricingResult } =
+  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult } =
     useMemo(() => {
       if (!chain || legs.length === 0) {
         return {
@@ -295,6 +298,8 @@ export function OptionsCalculator({
           breakEvenPoints: [],
           maxProfit: 0,
           maxLoss: 0,
+          profitAtTarget: null,
+          legSummaries: [],
           pricingResult: null,
         };
       }
@@ -354,17 +359,62 @@ export function OptionsCalculator({
         totalPremium += leg.premium * mult;
       }
 
+      // Per-leg P&L at expiration: compute max P/L from payoff range
+      const legPLAtExpiry = (leg: OptionLeg, price: number) => {
+        const mult = leg.positionType === "long" ? 1 : -1;
+        const intrinsic = leg.optionType === "call"
+          ? Math.max(price - leg.strikePrice, 0)
+          : Math.max(leg.strikePrice - price, 0);
+        return (intrinsic * mult - leg.premium * mult) * leg.quantity * 100;
+      };
+
+      const legSums = optionLegs.map((leg, i) => {
+        const label = `${leg.positionType === "long" ? "BUY" : "SELL"} ${leg.quantity}x ${leg.optionType.toUpperCase()} $${leg.strikePrice.toFixed(0)}`;
+
+        // Scan payoff points for this leg's max/min
+        let legMax = -Infinity;
+        let legMin = Infinity;
+        for (const point of payoff) {
+          const pl = point.legProfitLoss[i];
+          if (pl > legMax) legMax = pl;
+          if (pl < legMin) legMin = pl;
+        }
+
+        // P&L at target
+        const pt = parseFloat(priceTarget);
+        const plAtTarget = (!isNaN(pt) && pt > 0) ? Math.round(legPLAtExpiry(leg, pt) * 100) / 100 : null;
+
+        return { label, maxProfit: legMax, maxLoss: legMin, plAtTarget };
+      });
+
+      // Total P&L at price target
+      const pt = parseFloat(priceTarget);
+      let profitAtTarget: number | null = null;
+      if (!isNaN(pt) && pt > 0) {
+        profitAtTarget = 0;
+        for (const leg of optionLegs) {
+          profitAtTarget += legPLAtExpiry(leg, pt);
+        }
+        for (const leg of stockLegs) {
+          const mult = leg.positionType === "long" ? 1 : -1;
+          profitAtTarget += (pt - leg.entryPrice) * mult * leg.quantity;
+        }
+        profitAtTarget = Math.round(profitAtTarget * 100) / 100;
+      }
+
       return {
         payoffData: payoff,
         breakEvenPoints: breakEvens,
         maxProfit: mp,
         maxLoss: ml,
+        profitAtTarget,
+        legSummaries: legSums,
         pricingResult: {
           price: Math.abs(totalPremium),
           greeks: combinedGreeks,
         },
       };
-    }, [chain, legs, includeStockLeg]);
+    }, [chain, legs, includeStockLeg, priceTarget]);
 
   return (
     <div className="space-y-3">
@@ -395,136 +445,142 @@ export function OptionsCalculator({
         </CardContent>
       </Card>
 
-      {/* Quick Select Controls */}
+      {/* Position Builder */}
       {chain && (
         <Card>
           <CardHeader>
             <CardTitle>Position</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Quick select dropdowns */}
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                  Direction
-                </Label>
-                <Select
-                  value={positionType}
-                  onValueChange={(v) =>
-                    v && handlePositionTypeChange(v as PositionType)
-                  }
-                >
-                  <SelectTrigger className="w-full uppercase">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="long">LONG</SelectItem>
-                    <SelectItem value="short">SHORT</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Dropdowns — control the active leg */}
+            {activeLeg && (
+              <div className="flex flex-wrap items-baseline gap-2 rounded-md border-l-2 border-l-primary pl-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                    Direction
+                  </Label>
+                  <Select
+                    value={activePositionType}
+                    onValueChange={(v) =>
+                      v && handlePositionTypeChange(v as PositionType)
+                    }
+                  >
+                    <SelectTrigger className="w-full uppercase">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="long">LONG</SelectItem>
+                      <SelectItem value="short">SHORT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                  Type
-                </Label>
-                <Select
-                  value={optionType}
-                  onValueChange={(v) =>
-                    v && handleOptionTypeChange(v as OptionType)
-                  }
-                >
-                  <SelectTrigger className="w-full uppercase">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="call">CALL</SelectItem>
-                    <SelectItem value="put">PUT</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                    Type
+                  </Label>
+                  <Select
+                    value={activeOptionType}
+                    onValueChange={(v) =>
+                      v && handleOptionTypeChange(v as OptionType)
+                    }
+                  >
+                    <SelectTrigger className="w-full uppercase">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="call">CALL</SelectItem>
+                      <SelectItem value="put">PUT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                  Expiration
-                </Label>
-                <Select
-                  value={selectedExpiry}
-                  onValueChange={(v) => v && handleExpiryChange(v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select expiry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chain.expirations.map((exp) => (
-                      <SelectItem
-                        key={exp.expirationDate}
-                        value={exp.expirationDate}
-                      >
-                        {exp.expirationDate} ({exp.daysToExpiry}d)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                    Expiration
+                  </Label>
+                  <Select
+                    value={activeExpiry}
+                    onValueChange={(v) => v && handleExpiryChange(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select expiry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chain.expirations.map((exp) => (
+                        <SelectItem
+                          key={exp.expirationDate}
+                          value={exp.expirationDate}
+                        >
+                          {exp.expirationDate} ({exp.daysToExpiry}d)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                  Strike
-                </Label>
-                <Select
-                  value={primaryLeg?.contract.strikePrice.toString() ?? ""}
-                  onValueChange={(v) => v && handleStrikeChange(v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select strike" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currentContracts.map((c) => (
-                      <SelectItem
-                        key={c.strikePrice}
-                        value={c.strikePrice.toString()}
-                      >
-                        ${c.strikePrice.toFixed(2)}{" "}
-                        {c.inTheMoney ? "ITM" : "OTM"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                    Strike
+                  </Label>
+                  <Select
+                    value={activeLeg.contract.strikePrice.toString()}
+                    onValueChange={(v) => v && handleStrikeChange(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select strike" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeContracts.map((c) => (
+                        <SelectItem
+                          key={c.strikePrice}
+                          value={c.strikePrice.toString()}
+                        >
+                          ${c.strikePrice.toFixed(2)}{" "}
+                          {c.inTheMoney ? "ITM" : "OTM"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                  Qty
-                </Label>
-                <input
-                  type="number"
-                  min={1}
-                  max={9999}
-                  value={quantity}
-                  onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                  className="h-8 w-16 rounded-sm border border-input bg-card px-2 font-mono text-sm text-center outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
-                />
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                    Qty
+                  </Label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={activeLeg.quantity}
+                    onChange={(e) =>
+                      handleQuantityChange(parseInt(e.target.value) || 1)
+                    }
+                    className="flex items-center h-8 w-16 rounded-sm border border-input bg-card px-2.5 font-mono text-sm font-medium text-center outline-none appearance-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Legs list */}
             {legs.length > 0 && (
               <div className="space-y-px rounded-md border border-border overflow-hidden">
-                {legs.map((leg) => (
+                {legs.map((leg, index) => {
+                  const isActive = index === activeLegIndex;
+                  return (
                   <div
                     key={leg.id}
-                    className="flex items-center justify-between bg-muted/30 px-2.5 py-1.5 font-mono text-xs"
+                    onClick={() => setActiveLegIndex(index)}
+                    className={`flex items-center justify-between py-2 pr-3 font-mono text-sm cursor-pointer transition-colors border-l-2 ${
+                      isActive
+                        ? "border-l-primary bg-primary/5 dark:bg-primary/10"
+                        : "border-l-transparent bg-muted/30 hover:bg-muted/50"
+                    }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={9999}
-                        value={leg.quantity}
-                        onChange={(e) => updateLegQuantity(leg.id, parseInt(e.target.value) || 1)}
-                        className="h-5 w-10 rounded-sm border border-border bg-card px-1 text-center text-xs outline-none focus-visible:border-ring"
-                      />
+                    <div className="flex items-center gap-2.5 pl-3">
+                      <span className="text-muted-foreground w-5 text-center font-medium">
+                        {leg.quantity}
+                      </span>
                       <span className="text-muted-foreground">x</span>
                       <span
                         className={`font-bold ${leg.positionType === "long" ? "text-green-600" : "text-red-600"}`}
@@ -534,7 +590,7 @@ export function OptionsCalculator({
                       <span className="font-semibold">
                         {leg.optionType === "call" ? "CALL" : "PUT"}
                       </span>
-                      <span>${leg.contract.strikePrice.toFixed(2)}</span>
+                      <span className="font-medium">${leg.contract.strikePrice.toFixed(2)}</span>
                       <span className="text-muted-foreground">
                         {leg.contract.expirationDate}
                       </span>
@@ -543,76 +599,53 @@ export function OptionsCalculator({
                         ${leg.premium.toFixed(2)}
                       </span>
                     </div>
-                    <button
-                      onClick={() => removeLeg(leg.id)}
-                      className="ml-2 text-muted-foreground hover:text-red-500 transition-colors text-xs"
-                      aria-label="Remove leg"
-                    >
-                      x
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Show option chain link */}
-            <button
-              onClick={() => {
-                setShowChainTable(!showChainTable);
-                if (!showChainTable) setChainExpiry(selectedExpiry);
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showChainTable
-                ? "- Hide option chain"
-                : "+ Add leg / browse chain"}
-            </button>
-
-            {/* Option Chain Table (collapsible) */}
-            {showChainTable && (
-              <div className="space-y-2 border-t border-border pt-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                    Click to add leg
-                  </p>
-                  <div className="flex gap-px rounded-md border border-border overflow-hidden">
-                    {(["long", "short"] as const).map((pt) => (
+                    {legs.length > 1 && (
                       <button
-                        key={pt}
-                        onClick={() => setPositionType(pt)}
-                        className={`px-2.5 py-1 text-xs font-mono font-medium transition-colors ${
-                          positionType === pt
-                            ? "bg-foreground text-background"
-                            : "bg-card text-muted-foreground hover:bg-muted"
-                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeLeg(index);
+                        }}
+                        className="ml-2 text-muted-foreground hover:text-red-500 transition-colors text-sm"
+                        aria-label="Remove leg"
                       >
-                        {pt === "long" ? "BUY" : "SELL"}
+                        x
                       </button>
-                    ))}
+                    )}
                   </div>
-                </div>
+                  );
+                })}
 
-                <ExpiryTabs
-                  expirations={chain.expirations}
-                  selected={chainExpiry}
-                  onSelect={setChainExpiry}
-                />
-
-                {chainExpiryData && (
-                  <div className="max-h-[420px] overflow-y-auto">
-                    <OptionChainTable
-                      expiry={chainExpiryData}
-                      underlyingPrice={chain.underlyingPrice}
-                      selectedContract={null}
-                      selectedContracts={legs.map(
-                        (l) => l.contract.contractSymbol,
-                      )}
-                      onSelect={handleChainAddLeg}
-                    />
-                  </div>
-                )}
               </div>
             )}
+
+            {/* Add Leg + Price Target */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={addLeg}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                + Add leg
+              </button>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                  Price Target
+                </Label>
+                <div className="flex items-center gap-0.5">
+                  <span className="text-sm text-muted-foreground font-mono">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={chain ? (chain.underlyingPrice * 1.1).toFixed(0) : ""}
+                    value={priceTarget}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || /^\d*\.?\d*$/.test(v)) setPriceTarget(v);
+                    }}
+                    className="h-8 w-20 rounded-sm border border-input bg-card px-2 font-mono text-sm font-medium text-right outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30"
+                  />
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -646,8 +679,12 @@ export function OptionsCalculator({
           greeks={pricingResult.greeks}
           contractPrice={pricingResult.price}
           breakEvenPoints={breakEvenPoints}
+          underlyingPrice={chain!.underlyingPrice}
           maxProfit={maxProfit}
           maxLoss={maxLoss}
+          profitAtTarget={profitAtTarget}
+          priceTarget={parseFloat(priceTarget) || null}
+          legSummaries={legSummaries}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import type {
   MassiveSnapshotResponse,
   MassiveTickerSearchResponse,
-  MassivePrevDayResponse,
+  MassiveStockSnapshotResponse,
 } from "./types";
 
 const BASE_URL = "https://api.polygon.io";
@@ -14,7 +14,7 @@ function getApiKey(): string {
   return key;
 }
 
-async function fetchMassive<T>(path: string, params?: Record<string, string>): Promise<T> {
+async function fetchMassive<T>(path: string, params?: Record<string, string>, revalidate = 60): Promise<T> {
   const url = new URL(path, BASE_URL);
   url.searchParams.set("apiKey", getApiKey());
 
@@ -25,7 +25,7 @@ async function fetchMassive<T>(path: string, params?: Record<string, string>): P
   }
 
   const response = await fetch(url.toString(), {
-    next: { revalidate: 300 }, // Cache for 5 minutes
+    next: { revalidate },
   });
 
   if (!response.ok) {
@@ -70,7 +70,7 @@ export async function getOptionsSnapshot(
   while (nextUrl) {
     const separator = nextUrl.includes("?") ? "&" : "?";
     const pageUrl = `${nextUrl}${separator}apiKey=${getApiKey()}`;
-    const response = await fetch(pageUrl, { next: { revalidate: 300 } });
+    const response = await fetch(pageUrl, { next: { revalidate: 60 } });
     if (!response.ok) break;
     const page = (await response.json()) as MassiveSnapshotResponse;
     allResults.push(...(page.results ?? []));
@@ -81,11 +81,26 @@ export async function getOptionsSnapshot(
 }
 
 /**
- * Get previous day's closing price for a ticker.
+ * Get current stock price via snapshot (most recent trade).
  */
-export async function getPrevDayClose(ticker: string): Promise<number> {
-  const data = await fetchMassive<MassivePrevDayResponse>(
-    `/v2/aggs/ticker/${ticker}/prev`
+export async function getStockPrice(ticker: string): Promise<number> {
+  const data = await fetchMassive<MassiveStockSnapshotResponse>(
+    `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`
   );
-  return data.results?.[0]?.c ?? 0;
+  // lastTrade.p is the most recent trade price
+  return data.ticker?.lastTrade?.p ?? data.ticker?.day?.c ?? 0;
+}
+
+/**
+ * Extract underlying price from option snapshot results.
+ * Falls back to 0 if not available.
+ */
+export function extractUnderlyingPrice(snapshot: MassiveSnapshotResponse): number {
+  // The underlying_asset.price field on option snapshots is the most current
+  for (const result of snapshot.results ?? []) {
+    if (result.underlying_asset?.price && result.underlying_asset.price > 0) {
+      return result.underlying_asset.price;
+    }
+  }
+  return 0;
 }

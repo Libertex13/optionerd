@@ -14,6 +14,7 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
   const [results, setResults] = useState<TickerSearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -41,12 +42,14 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
 
   const handleInputChange = (value: string) => {
     setQuery(value.toUpperCase());
+    setSelectedName(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(value), 300);
   };
 
   const handleSelect = (ticker: string) => {
     setQuery(ticker);
+    setSelectedName(results.find((r) => r.ticker === ticker)?.name ?? null);
     setIsOpen(false);
     onSelect(ticker);
   };
@@ -69,8 +72,17 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
         placeholder="Search ticker (AAPL, TSLA, SPY)..."
         value={query}
         onChange={(e) => handleInputChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && results.length > 0) {
+            e.preventDefault();
+            handleSelect(results[0].ticker);
+          }
+        }}
         onFocus={() => results.length > 0 && setIsOpen(true)}
       />
+      {selectedName && (
+        <p className="mt-1 text-xs text-muted-foreground truncate">{selectedName}</p>
+      )}
       {isLoading && (
         <div className="absolute right-2.5 top-2 text-xs text-muted-foreground font-mono">
           ...

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOptionsSnapshot, getPrevDayClose } from "@/lib/massive/client";
+import { getOptionsSnapshot, getStockPrice, extractUnderlyingPrice } from "@/lib/massive/client";
 import type {
   OptionChain,
   OptionChainExpiry,
@@ -19,10 +19,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [optionsData, underlyingPrice] = await Promise.all([
+    const [optionsData, stockPrice] = await Promise.all([
       getOptionsSnapshot(ticker),
-      getPrevDayClose(ticker),
+      getStockPrice(ticker),
     ]);
+
+    // Prefer underlying price from option snapshot (most current), fall back to stock snapshot
+    const underlyingPrice = extractUnderlyingPrice(optionsData) || stockPrice;
 
     if (!optionsData.results || optionsData.results.length === 0) {
       return NextResponse.json(
@@ -85,7 +88,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(chain, {
       headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
       },
     });
   } catch (error) {

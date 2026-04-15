@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPrevDayClose } from "@/lib/massive/client";
+import { getStockPrice } from "@/lib/massive/client";
 import type { StockQuote } from "@/types/market";
 
 export async function GET(request: Request) {
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const price = await getPrevDayClose(ticker);
+    const price = await getStockPrice(ticker);
 
     const quote: StockQuote = {
       ticker,
@@ -23,13 +23,13 @@ export async function GET(request: Request) {
       change: 0,
       changePercent: 0,
       volume: 0,
-      previousClose: price,
+      previousClose: 0,
       timestamp: Date.now(),
     };
 
     return NextResponse.json(quote, {
       headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
       },
     });
   } catch (error) {
