@@ -28,6 +28,7 @@ import {
   DEFAULT_RISK_FREE_RATE,
   CALENDAR_DAYS_PER_YEAR,
 } from "@/lib/utils/constants";
+import { formatCurrency } from "@/lib/utils/formatting";
 
 /** A selected leg with its source contract and position config */
 interface SelectedLeg {
@@ -387,11 +388,33 @@ export function OptionsCalculator({
           if (pl < legMin) legMin = pl;
         }
 
-        // P&L at target
+        // P&L and theoretical value at target
         const pt = parseFloat(priceTarget);
         const plAtTarget = (!isNaN(pt) && pt > 0) ? Math.round(legPLAtExpiry(leg, pt) * 100) / 100 : null;
 
-        return { label, maxProfit: legMax, maxLoss: legMin, plAtTarget };
+        // Intrinsic value at target (value per share at expiration)
+        let valueAtTarget: number | null = null;
+        if (!isNaN(pt) && pt > 0) {
+          const intrinsic = leg.optionType === "call"
+            ? Math.max(pt - leg.strikePrice, 0)
+            : Math.max(leg.strikePrice - pt, 0);
+          valueAtTarget = Math.round(intrinsic * 100) / 100;
+        }
+
+        return {
+          label,
+          maxProfit: legMax,
+          maxLoss: legMin,
+          plAtTarget,
+          // Leg metadata for target simulation display
+          quantity: leg.quantity,
+          positionType: leg.positionType,
+          optionType: leg.optionType,
+          strikePrice: leg.strikePrice,
+          expirationDate: leg.expirationDate,
+          premium: leg.premium,
+          valueAtTarget,
+        };
       });
 
       // Total P&L at price target
@@ -658,33 +681,119 @@ export function OptionsCalculator({
               </div>
             )}
 
-            {/* Add Leg + Price Target */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={addLeg}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                + Add leg
-              </button>
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+            {/* Add Leg */}
+            <button
+              onClick={addLeg}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              + Add leg
+            </button>
+
+            {/* Price Target */}
+            <div className="rounded-md border border-dashed border-border p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest shrink-0">
                   Price Target
                 </Label>
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-1">
                   <span className="text-sm text-muted-foreground font-mono">$</span>
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder={chain ? (chain.underlyingPrice * 1.1).toFixed(0) : ""}
+                    placeholder="Enter price"
                     value={priceTarget}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === "" || /^\d*\.?\d*$/.test(v)) setPriceTarget(v);
                     }}
-                    className="h-8 w-20 rounded-sm border border-input bg-card px-2 font-mono text-sm font-medium text-right outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                    className="h-8 w-28 rounded-sm border border-input bg-transparent px-2 font-mono text-sm font-medium text-right outline-none placeholder:text-muted-foreground/40 placeholder:font-normal focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
                   />
                 </div>
+                {priceTarget && (
+                  <button
+                    onClick={() => setPriceTarget("")}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
+
+              {/* Target simulation: show each leg's value & P&L at target */}
+              {profitAtTarget !== null && parseFloat(priceTarget) > 0 && (
+                <div className="space-y-px rounded-md border border-border overflow-hidden">
+                  {legSummaries.map((leg, index) => {
+                    const pnl = leg.plAtTarget ?? 0;
+                    const pnlColor = pnl > 0
+                      ? "text-green-600 dark:text-green-400"
+                      : pnl < 0
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-muted-foreground";
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between py-2 px-3 font-mono text-sm ${
+                          pnl > 0
+                            ? "bg-green-500/5 dark:bg-green-500/10"
+                            : pnl < 0
+                              ? "bg-red-500/5 dark:bg-red-500/10"
+                              : "bg-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-muted-foreground w-5 text-center font-medium">
+                            {leg.quantity}
+                          </span>
+                          <span className="text-muted-foreground">x</span>
+                          <span
+                            className={`font-bold ${leg.positionType === "long" ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {leg.positionType === "long" ? "BUY" : "SELL"}
+                          </span>
+                          <span className="font-semibold">
+                            {leg.optionType.toUpperCase()}
+                          </span>
+                          <span className="font-medium">${leg.strikePrice.toFixed(2)}</span>
+                          <span className="text-muted-foreground">
+                            {leg.expirationDate}
+                          </span>
+                          <span className="text-muted-foreground">@</span>
+                          <span className="font-semibold">
+                            ${leg.valueAtTarget !== null ? leg.valueAtTarget.toFixed(2) : "—"}
+                          </span>
+                        </div>
+                        <span className={`font-bold tabular-nums ${pnlColor}`}>
+                          {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {/* Total */}
+                  <div className={`flex items-center justify-between py-2 px-3 font-mono text-sm font-bold border-t border-border ${
+                    profitAtTarget > 0
+                      ? "bg-green-500/10 dark:bg-green-500/15"
+                      : profitAtTarget < 0
+                        ? "bg-red-500/10 dark:bg-red-500/15"
+                        : "bg-muted/30"
+                  }`}>
+                    <span className="text-muted-foreground">
+                      TOTAL at ${parseFloat(priceTarget).toFixed(2)}
+                    </span>
+                    <span className={
+                      profitAtTarget > 0
+                        ? "text-green-600 dark:text-green-400"
+                        : profitAtTarget < 0
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-muted-foreground"
+                    }>
+                      {profitAtTarget >= 0 ? "+" : ""}{formatCurrency(profitAtTarget)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
