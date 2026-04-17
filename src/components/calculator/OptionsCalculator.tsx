@@ -40,6 +40,13 @@ interface SelectedLeg {
   quantity: number;
 }
 
+/** Stock/shares leg */
+interface StockLegConfig {
+  positionType: "long" | "short";
+  quantity: number;
+  entryPrice: number;
+}
+
 interface OptionsCalculatorProps {
   defaultOptionType?: OptionType;
   defaultPositionType?: PositionType;
@@ -58,6 +65,11 @@ export function OptionsCalculator({
   const [activeLegIndex, setActiveLegIndex] = useState(0);
   const [priceTarget, setPriceTarget] = useState<string>("");
   const [qtyInput, setQtyInput] = useState<string>("1");
+  const [stockLeg, setStockLeg] = useState<StockLegConfig | null>(
+    includeStockLeg ? { positionType: "long", quantity: 100, entryPrice: 0 } : null,
+  );
+  const [stockQtyInput, setStockQtyInput] = useState<string>(includeStockLeg ? "100" : "");
+  const [stockPriceInput, setStockPriceInput] = useState<string>("");
 
   const activeLeg = legs[activeLegIndex] ?? null;
 
@@ -151,6 +163,17 @@ export function OptionsCalculator({
 
       const data: OptionChain = await response.json();
       setChain(data);
+
+      // Auto-populate stock leg for covered strategies
+      if (includeStockLeg) {
+        setStockLeg({ positionType: "long", quantity: 100, entryPrice: data.underlyingPrice });
+        setStockQtyInput("100");
+        setStockPriceInput(data.underlyingPrice.toFixed(2));
+      } else {
+        setStockLeg(null);
+        setStockQtyInput("");
+        setStockPriceInput("");
+      }
 
       const expiry = getDefaultExpiry(data);
       if (expiry) {
@@ -329,12 +352,12 @@ export function OptionsCalculator({
         impliedVolatility: leg.contract.impliedVolatility || 0.3,
       }));
 
-      const stockLegs = includeStockLeg
+      const stockLegs = stockLeg
         ? [
             {
-              positionType: "long" as const,
-              quantity: 100,
-              entryPrice: chain.underlyingPrice,
+              positionType: stockLeg.positionType,
+              quantity: stockLeg.quantity,
+              entryPrice: stockLeg.entryPrice,
             },
           ]
         : [];
@@ -484,7 +507,7 @@ export function OptionsCalculator({
         isUnlimitedProfit: unlimitedProfit,
         isUnlimitedLoss: unlimitedLoss,
       };
-    }, [chain, legs, includeStockLeg, priceTarget]);
+    }, [chain, legs, stockLeg, priceTarget]);
 
   return (
     <div className="space-y-3">
@@ -703,6 +726,84 @@ export function OptionsCalculator({
               </div>
             )}
 
+            {/* Stock leg */}
+            {stockLeg && (
+              <div className="rounded-md border border-border overflow-hidden">
+                <div className="flex items-center justify-between py-2 px-3 font-mono text-sm bg-blue-500/5 dark:bg-blue-500/10 border-l-2 border-l-blue-500">
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-bold text-blue-600 dark:text-blue-400">SHARES</span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={stockQtyInput}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || /^\d{1,5}$/.test(v)) {
+                            setStockQtyInput(v);
+                            const parsed = parseInt(v);
+                            if (!isNaN(parsed) && parsed >= 1) {
+                              setStockLeg((prev) => prev ? { ...prev, quantity: parsed } : prev);
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseInt(stockQtyInput);
+                          if (isNaN(parsed) || parsed < 1) {
+                            setStockQtyInput("100");
+                            setStockLeg((prev) => prev ? { ...prev, quantity: 100 } : prev);
+                          }
+                        }}
+                        className="h-7 w-16 rounded-sm border border-input bg-transparent px-1.5 font-mono text-sm font-medium text-center outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
+                      />
+                      <span className="text-muted-foreground text-xs">shares</span>
+                    </div>
+                    <span className="text-muted-foreground">@</span>
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-muted-foreground">$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={stockPriceInput}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || /^\d*\.?\d*$/.test(v)) {
+                            setStockPriceInput(v);
+                            const parsed = parseFloat(v);
+                            if (!isNaN(parsed) && parsed > 0) {
+                              setStockLeg((prev) => prev ? { ...prev, entryPrice: parsed } : prev);
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseFloat(stockPriceInput);
+                          if (isNaN(parsed) || parsed <= 0) {
+                            const fallback = chain?.underlyingPrice ?? 0;
+                            setStockPriceInput(fallback.toFixed(2));
+                            setStockLeg((prev) => prev ? { ...prev, entryPrice: fallback } : prev);
+                          } else {
+                            setStockPriceInput(parsed.toFixed(2));
+                          }
+                        }}
+                        className="h-7 w-20 rounded-sm border border-input bg-transparent px-1.5 font-mono text-sm font-medium text-right outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setStockLeg(null);
+                      setStockQtyInput("");
+                      setStockPriceInput("");
+                    }}
+                    className="ml-2 text-muted-foreground hover:text-red-500 transition-colors text-sm"
+                    aria-label="Remove shares"
+                  >
+                    x
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Unlimited loss warning */}
             {isUnlimitedLoss && (
               <div className="flex items-start gap-2 rounded-md border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
@@ -714,13 +815,28 @@ export function OptionsCalculator({
               </div>
             )}
 
-            {/* Add Leg */}
-            <button
-              onClick={addLeg}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              + Add leg
-            </button>
+            {/* Add Leg / Add Shares */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={addLeg}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                + Add leg
+              </button>
+              {!stockLeg && (
+                <button
+                  onClick={() => {
+                    const price = chain?.underlyingPrice ?? 0;
+                    setStockLeg({ positionType: "long", quantity: 100, entryPrice: price });
+                    setStockQtyInput("100");
+                    setStockPriceInput(price.toFixed(2));
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  + Add shares
+                </button>
+              )}
+            </div>
 
             {/* Price Target */}
             <div className="rounded-md border border-dashed border-border p-3 space-y-3">
