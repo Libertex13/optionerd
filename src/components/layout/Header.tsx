@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -5,10 +6,23 @@ export function Header() {
   return (
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex h-10 max-w-7xl items-center justify-between px-3">
-        <Link href="/" className="flex items-center gap-1.5">
-          <span className="font-mono text-sm font-bold tracking-tight">
-            optio<span className="text-foreground/60">nerd</span>
-          </span>
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo-light.svg"
+            alt="optionerd"
+            width={120}
+            height={18}
+            className="block dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo-dark.svg"
+            alt="optionerd"
+            width={120}
+            height={18}
+            className="hidden dark:block"
+            priority
+          />
         </Link>
         <nav className="flex items-center gap-4 font-mono text-xs text-muted-foreground">
           <Link href="/calculator/long-call" className="hover:text-foreground transition-colors">
