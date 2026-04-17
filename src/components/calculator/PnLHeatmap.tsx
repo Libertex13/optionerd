@@ -121,26 +121,34 @@ function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number)
 }
 
 /**
- * Map a value to a background color based on the display mode.
+ * Map a value to an opaque background color.
+ * Uses solid colors that go from muted to saturated for readability.
+ * Green for profit, red for loss — always white text.
  */
 function cellColor(value: number, maxAbsValue: number): string {
-  if (maxAbsValue === 0) return "transparent";
-  const intensity = Math.min(Math.abs(value) / maxAbsValue, 1);
+  if (maxAbsValue === 0 || value === 0) return "var(--color-muted)";
+  const t = Math.min(Math.abs(value) / maxAbsValue, 1);
 
   if (value > 0) {
-    const alpha = 0.08 + intensity * 0.72;
-    return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
-  } else if (value < 0) {
-    const alpha = 0.08 + intensity * 0.72;
-    return `rgba(239, 68, 68, ${alpha.toFixed(3)})`;
+    // Interpolate from muted green to rich green
+    // hsl(142, 45%, 82%) → hsl(142, 70%, 35%)
+    const s = 45 + t * 25;
+    const l = 82 - t * 47;
+    return `hsl(142, ${s.toFixed(0)}%, ${l.toFixed(0)}%)`;
+  } else {
+    // Interpolate from muted red to rich red
+    // hsl(0, 45%, 85%) → hsl(0, 72%, 38%)
+    const s = 45 + t * 27;
+    const l = 85 - t * 47;
+    return `hsl(0, ${s.toFixed(0)}%, ${l.toFixed(0)}%)`;
   }
-  return "transparent";
 }
 
 function textColor(value: number, maxAbsValue: number): string {
-  if (maxAbsValue === 0) return "var(--color-foreground)";
-  const intensity = Math.min(Math.abs(value) / maxAbsValue, 1);
-  return intensity > 0.5 ? "white" : "var(--color-foreground)";
+  if (maxAbsValue === 0 || value === 0) return "var(--color-foreground)";
+  const t = Math.min(Math.abs(value) / maxAbsValue, 1);
+  // White text once the background is dark enough (~40% threshold)
+  return t > 0.25 ? "white" : "#1f2937";
 }
 
 function formatDollar(pnl: number): string {
