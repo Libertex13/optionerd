@@ -12,6 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { TickerSearch } from "./TickerSearch";
 import { PayoffDiagram } from "./PayoffDiagram";
+import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
 import type { OptionChain, OptionContract } from "@/types/market";
 import type { OptionType, PositionType, OptionLeg } from "@/types/options";
@@ -290,7 +291,7 @@ export function OptionsCalculator({
   }, [chain, activeExpiry, activeOptionType]);
 
   // Compute payoff from ALL legs
-  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult } =
+  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte } =
     useMemo(() => {
       if (!chain || legs.length === 0) {
         return {
@@ -301,6 +302,8 @@ export function OptionsCalculator({
           profitAtTarget: null,
           legSummaries: [],
           pricingResult: null,
+          strategyLegs: [],
+          maxDte: 0,
         };
       }
 
@@ -402,6 +405,15 @@ export function OptionsCalculator({
         profitAtTarget = Math.round(profitAtTarget * 100) / 100;
       }
 
+      // Max DTE across all legs (for heatmap date range)
+      let maxLegDte = 0;
+      for (const leg of legs) {
+        const dte = chain.expirations.find(
+          (e) => e.expirationDate === leg.contract.expirationDate,
+        )?.daysToExpiry ?? 30;
+        if (dte > maxLegDte) maxLegDte = dte;
+      }
+
       return {
         payoffData: payoff,
         breakEvenPoints: breakEvens,
@@ -413,6 +425,8 @@ export function OptionsCalculator({
           price: Math.abs(totalPremium),
           greeks: combinedGreeks,
         },
+        strategyLegs: allLegs,
+        maxDte: maxLegDte,
       };
     }, [chain, legs, includeStockLeg, priceTarget]);
 
@@ -668,6 +682,24 @@ export function OptionsCalculator({
               data={payoffData}
               breakEvenPoints={breakEvenPoints}
               currentPrice={chain.underlyingPrice}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* P&L Heatmap */}
+      {strategyLegs.length > 0 && chain && maxDte > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              P&L by Price &amp; Date
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PnLHeatmap
+              legs={strategyLegs}
+              currentPrice={chain.underlyingPrice}
+              daysToExpiry={maxDte}
             />
           </CardContent>
         </Card>
