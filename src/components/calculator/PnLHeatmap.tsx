@@ -209,7 +209,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
     <div className="space-y-2">
       {/* Toggle */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
           {displayMode === "%" && costBasis > 0
             ? `Return on $${costBasis.toLocaleString("en-US", { maximumFractionDigits: 0 })} risk`
             : "\u00A0"}
@@ -219,7 +219,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
             <button
               key={mode}
               onClick={() => setDisplayMode(mode)}
-              className={`px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
+              className={`px-3.5 py-1.5 font-mono text-sm font-semibold transition-colors ${
                 displayMode === mode
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-muted-foreground hover:text-foreground"
@@ -233,16 +233,16 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse font-mono text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-card px-2 py-1.5 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+              <th className="sticky left-0 z-10 bg-card px-3 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-widest">
                 Price
               </th>
               {dateColumns.map((col, i) => (
                 <th
                   key={i}
-                  className="px-1.5 py-1.5 text-center text-[10px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
+                  className="px-2 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
                 >
                   {col.label}
                 </th>
@@ -255,7 +255,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
               return (
                 <tr key={rowIdx}>
                   <td
-                    className={`sticky left-0 z-10 bg-card px-2 py-1 text-right font-medium whitespace-nowrap border-r border-border ${
+                    className={`sticky left-0 z-10 bg-card px-3 py-1.5 text-right font-medium whitespace-nowrap border-r border-border ${
                       isNearCurrent
                         ? "text-foreground font-bold"
                         : "text-muted-foreground"
@@ -263,7 +263,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
                   >
                     ${price.toFixed(2)}
                     {isNearCurrent && (
-                      <span className="ml-1 text-[9px] text-primary font-semibold">&#9664;</span>
+                      <span className="ml-1 text-xs text-primary font-semibold">&#9664;</span>
                     )}
                   </td>
                   {grid[rowIdx].map((cell, colIdx) => {
@@ -271,7 +271,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
                     return (
                       <td
                         key={colIdx}
-                        className="px-1 py-1 text-center font-medium tabular-nums"
+                        className="px-1.5 py-1.5 text-center font-semibold tabular-nums"
                         style={{
                           backgroundColor: cellColor(value, maxAbs),
                           color: textColor(value, maxAbs),
