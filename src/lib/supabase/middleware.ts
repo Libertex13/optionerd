@@ -6,6 +6,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * This keeps the session alive and syncs cookies.
  */
 export async function updateSession(request: NextRequest) {
+  // Skip if Supabase isn't configured (build time / missing env vars)
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
