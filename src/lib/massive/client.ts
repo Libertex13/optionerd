@@ -1,7 +1,7 @@
 import type {
   MassiveSnapshotResponse,
   MassiveTickerSearchResponse,
-  MassiveStockSnapshotResponse,
+  MassivePrevDayResponse,
 } from "./types";
 
 const BASE_URL = "https://api.polygon.io";
@@ -81,14 +81,14 @@ export async function getOptionsSnapshot(
 }
 
 /**
- * Get current stock price via snapshot (most recent trade).
+ * Get current stock price via previous day aggregates.
  */
 export async function getStockPrice(ticker: string): Promise<number> {
-  const data = await fetchMassive<MassiveStockSnapshotResponse>(
-    `/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`
+  const data = await fetchMassive<MassivePrevDayResponse>(
+    `/v2/aggs/ticker/${ticker}/prev`
   );
-  // lastTrade.p is the most recent trade price
-  return data.ticker?.lastTrade?.p ?? data.ticker?.day?.c ?? 0;
+  const result = data.results?.[0];
+  return result?.c ?? result?.vw ?? 0;
 }
 
 /**

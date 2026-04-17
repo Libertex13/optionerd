@@ -34,6 +34,7 @@ export interface MassivePrevDayResponse {
     h: number;
     l: number;
     v: number;
+    vw: number;
     t: number;
   }[];
 }

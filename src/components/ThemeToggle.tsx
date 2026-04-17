@@ -13,8 +13,8 @@ export function ThemeToggle() {
       aria-label="Toggle theme"
       suppressHydrationWarning
     >
-      <Sun size={14} className="hidden dark:block" />
-      <Moon size={14} className="block dark:hidden" />
+      <Sun size={16} className="hidden dark:block" />
+      <Moon size={16} className="block dark:hidden" />
     </button>
   );
 }
