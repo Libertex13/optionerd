@@ -155,22 +155,32 @@ export function PayoffDiagram({
           />
 
           {/* Break-even */}
-          {breakEvenPoints.map((be, i) => (
-            <ReferenceLine
-              key={be}
-              x={be}
-              stroke="#a3a3a3"
-              strokeDasharray="4 4"
-              label={{
-                value: `BE $${be.toFixed(2)}`,
-                position: i % 2 === 0 ? "insideTopLeft" : "insideTopRight",
-                fill: "#737373",
-                fontSize: 13,
-                fontWeight: 500,
-                offset: 10,
-              }}
-            />
-          ))}
+          {breakEvenPoints.map((be, i) => {
+            // Stagger labels vertically when break-evens are close together
+            const tooClose = breakEvenPoints.some(
+              (other, j) => j !== i && Math.abs(other - be) / currentPrice < 0.08
+            );
+            const position = tooClose
+              ? (i % 2 === 0 ? "insideTopLeft" : "insideBottomRight")
+              : (i % 2 === 0 ? "insideTopLeft" : "insideTopRight");
+
+            return (
+              <ReferenceLine
+                key={be}
+                x={be}
+                stroke="#a3a3a3"
+                strokeDasharray="4 4"
+                label={{
+                  value: `BE $${be.toFixed(2)}`,
+                  position,
+                  fill: "#737373",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  offset: 10,
+                }}
+              />
+            );
+          })}
 
           {/* Profit shading */}
           <Area type="monotone" dataKey="profitFill" stroke="none" fill="url(#profitFill)" dot={false} activeDot={false} tooltipType="none" />

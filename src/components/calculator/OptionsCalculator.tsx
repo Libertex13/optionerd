@@ -57,8 +57,15 @@ export function OptionsCalculator({
   const [legs, setLegs] = useState<SelectedLeg[]>([]);
   const [activeLegIndex, setActiveLegIndex] = useState(0);
   const [priceTarget, setPriceTarget] = useState<string>("");
+  const [qtyInput, setQtyInput] = useState<string>("1");
 
   const activeLeg = legs[activeLegIndex] ?? null;
+
+  const switchToLeg = useCallback((index: number) => {
+    setActiveLegIndex(index);
+    const leg = legs[index];
+    setQtyInput(leg ? String(leg.quantity) : "1");
+  }, [legs]);
 
   const findAtmContract = useCallback(
     (data: OptionChain, expiry: string, type: OptionType) => {
@@ -136,7 +143,7 @@ export function OptionsCalculator({
     setIsLoadingChain(true);
     setChainError(null);
     setLegs([]);
-    setActiveLegIndex(0);
+    switchToLeg(0);
 
     try {
       const response = await fetch(`/api/options/chain?ticker=${ticker}`);
@@ -265,16 +272,16 @@ export function OptionsCalculator({
     if (!atm) return;
     const newLeg = makeLeg(atm, "call", "long", chain, expiry.expirationDate, 1);
     setLegs((prev) => [...prev, newLeg]);
-    setActiveLegIndex(legs.length); // select the new leg
+    switchToLeg(legs.length); // select the new leg
   };
 
   const removeLeg = (index: number) => {
     setLegs((prev) => prev.filter((_, i) => i !== index));
     // Adjust active index
     if (activeLegIndex >= legs.length - 1) {
-      setActiveLegIndex(Math.max(0, legs.length - 2));
+      switchToLeg(Math.max(0, legs.length - 2));
     } else if (index < activeLegIndex) {
-      setActiveLegIndex(activeLegIndex - 1);
+      switchToLeg(activeLegIndex - 1);
     }
   };
 
@@ -612,14 +619,29 @@ export function OptionsCalculator({
                     Qty
                   </Label>
                   <input
-                    type="number"
-                    min={1}
-                    max={9999}
-                    value={activeLeg.quantity}
-                    onChange={(e) =>
-                      handleQuantityChange(parseInt(e.target.value) || 1)
-                    }
-                    className="flex items-center h-8 w-16 rounded-sm border border-input bg-card px-2.5 font-mono text-sm font-medium text-center outline-none appearance-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                    type="text"
+                    inputMode="numeric"
+                    value={qtyInput}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || /^\d{1,4}$/.test(v)) {
+                        setQtyInput(v);
+                        const parsed = parseInt(v);
+                        if (!isNaN(parsed) && parsed >= 1) {
+                          handleQuantityChange(parsed);
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      const parsed = parseInt(qtyInput);
+                      if (isNaN(parsed) || parsed < 1) {
+                        setQtyInput("1");
+                        handleQuantityChange(1);
+                      } else {
+                        setQtyInput(String(Math.min(parsed, 9999)));
+                      }
+                    }}
+                    className="flex items-center h-8 w-16 rounded-sm border border-input bg-card px-2.5 font-mono text-sm font-medium text-center outline-none appearance-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30"
                   />
                 </div>
               </div>
@@ -633,7 +655,7 @@ export function OptionsCalculator({
                   return (
                   <div
                     key={leg.id}
-                    onClick={() => setActiveLegIndex(index)}
+                    onClick={() => switchToLeg(index)}
                     className={`flex items-center justify-between py-2 pr-3 font-mono text-sm cursor-pointer transition-colors border-l-2 ${
                       isActive
                         ? "border-l-primary bg-primary/5 dark:bg-primary/10"
@@ -678,6 +700,17 @@ export function OptionsCalculator({
                   );
                 })}
 
+              </div>
+            )}
+
+            {/* Unlimited loss warning */}
+            {isUnlimitedLoss && (
+              <div className="flex items-start gap-2 rounded-md border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+                <span className="font-bold text-sm leading-none mt-px">!</span>
+                <span>
+                  <span className="font-semibold">Unlimited risk.</span>{" "}
+                  This position has uncovered short options — losses are theoretically unlimited.
+                </span>
               </div>
             )}
 
