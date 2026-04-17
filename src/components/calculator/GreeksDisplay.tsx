@@ -20,6 +20,7 @@ interface GreeksDisplayProps {
   profitAtTarget: number | null;
   priceTarget: number | null;
   legSummaries: LegSummary[];
+  chanceOfProfit: number | null;
 }
 
 function rrPct(profit: number, loss: number): string {
@@ -52,6 +53,7 @@ export function GreeksDisplay({
   profitAtTarget,
   priceTarget,
   legSummaries,
+  chanceOfProfit,
 }: GreeksDisplayProps) {
   const isUnlimitedProfit = maxProfit > 100000;
   const absMaxLoss = Math.abs(maxLoss);
@@ -68,7 +70,7 @@ export function GreeksDisplay({
   return (
     <div className="space-y-3">
       {/* Basics */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border">
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
         <MetricCell
           label="Contract Price"
           value={formatCurrency(contractPrice)}
@@ -78,6 +80,18 @@ export function GreeksDisplay({
           label="Break Even"
           value={breakEvenPoints.length > 0 ? breakEvenPoints.map((b) => formatCurrency(b)).join(", ") : "\u2014"}
           sub={breakEvenSubs.length > 0 ? breakEvenSubs.join(", ") : "at expiration"}
+        />
+        <MetricCell
+          label="Chance of Profit"
+          value={chanceOfProfit !== null ? `${(chanceOfProfit * 100).toFixed(1)}%` : "\u2014"}
+          sub="at expiration"
+          className={
+            chanceOfProfit !== null
+              ? chanceOfProfit >= 0.5
+                ? "text-green-600 dark:text-green-400"
+                : "text-red-600 dark:text-red-400"
+              : ""
+          }
         />
       </div>
 

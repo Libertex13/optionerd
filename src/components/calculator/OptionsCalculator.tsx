@@ -23,6 +23,7 @@ import {
   findBreakEvenPoints,
   calculateMaxProfitLoss,
 } from "@/lib/pricing/payoff";
+import { calculateChanceOfProfit } from "@/lib/pricing/probability";
 import {
   DEFAULT_RISK_FREE_RATE,
   CALENDAR_DAYS_PER_YEAR,
@@ -291,7 +292,7 @@ export function OptionsCalculator({
   }, [chain, activeExpiry, activeOptionType]);
 
   // Compute payoff from ALL legs
-  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte } =
+  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte, chanceOfProfit } =
     useMemo(() => {
       if (!chain || legs.length === 0) {
         return {
@@ -304,6 +305,7 @@ export function OptionsCalculator({
           pricingResult: null,
           strategyLegs: [],
           maxDte: 0,
+          chanceOfProfit: null as number | null,
         };
       }
 
@@ -414,6 +416,25 @@ export function OptionsCalculator({
         if (dte > maxLegDte) maxLegDte = dte;
       }
 
+      // Chance of profit: weighted-average IV across legs, max DTE
+      let weightedIV = 0;
+      let totalQty = 0;
+      for (const leg of optionLegs) {
+        weightedIV += leg.impliedVolatility * leg.quantity;
+        totalQty += leg.quantity;
+      }
+      const avgIV = totalQty > 0 ? weightedIV / totalQty : 0.3;
+      const cop = maxLegDte > 0
+        ? calculateChanceOfProfit(
+            payoff,
+            breakEvens,
+            chain.underlyingPrice,
+            avgIV,
+            maxLegDte / CALENDAR_DAYS_PER_YEAR,
+            DEFAULT_RISK_FREE_RATE,
+          )
+        : null;
+
       return {
         payoffData: payoff,
         breakEvenPoints: breakEvens,
@@ -427,6 +448,7 @@ export function OptionsCalculator({
         },
         strategyLegs: allLegs,
         maxDte: maxLegDte,
+        chanceOfProfit: cop,
       };
     }, [chain, legs, includeStockLeg, priceTarget]);
 
@@ -717,6 +739,7 @@ export function OptionsCalculator({
           profitAtTarget={profitAtTarget}
           priceTarget={parseFloat(priceTarget) || null}
           legSummaries={legSummaries}
+          chanceOfProfit={chanceOfProfit}
         />
       )}
     </div>
