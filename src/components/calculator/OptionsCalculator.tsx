@@ -292,7 +292,7 @@ export function OptionsCalculator({
   }, [chain, activeExpiry, activeOptionType]);
 
   // Compute payoff from ALL legs
-  const { payoffData, breakEvenPoints, maxProfit, maxLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte, chanceOfProfit } =
+  const { payoffData, breakEvenPoints, maxProfit, maxLoss, isUnlimitedProfit, isUnlimitedLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte, chanceOfProfit } =
     useMemo(() => {
       if (!chain || legs.length === 0) {
         return {
@@ -306,6 +306,8 @@ export function OptionsCalculator({
           strategyLegs: [],
           maxDte: 0,
           chanceOfProfit: null as number | null,
+          isUnlimitedProfit: false,
+          isUnlimitedLoss: false,
         };
       }
 
@@ -332,7 +334,7 @@ export function OptionsCalculator({
       const allLegs = [...optionLegs, ...stockLegs];
       const payoff = generatePayoffAtExpiry(allLegs, chain.underlyingPrice);
       const breakEvens = findBreakEvenPoints(payoff);
-      const { maxProfit: mp, maxLoss: ml } = calculateMaxProfitLoss(payoff);
+      const { maxProfit: mp, maxLoss: ml, isUnlimitedProfit: unlimitedProfit, isUnlimitedLoss: unlimitedLoss } = calculateMaxProfitLoss(payoff);
 
       // Greeks: sum across all legs
       const combinedGreeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
@@ -449,6 +451,8 @@ export function OptionsCalculator({
         strategyLegs: allLegs,
         maxDte: maxLegDte,
         chanceOfProfit: cop,
+        isUnlimitedProfit: unlimitedProfit,
+        isUnlimitedLoss: unlimitedLoss,
       };
     }, [chain, legs, includeStockLeg, priceTarget]);
 
@@ -740,6 +744,8 @@ export function OptionsCalculator({
           priceTarget={parseFloat(priceTarget) || null}
           legSummaries={legSummaries}
           chanceOfProfit={chanceOfProfit}
+          isUnlimitedProfit={isUnlimitedProfit}
+          isUnlimitedLoss={isUnlimitedLoss}
         />
       )}
     </div>

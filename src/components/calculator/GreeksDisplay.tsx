@@ -21,6 +21,8 @@ interface GreeksDisplayProps {
   priceTarget: number | null;
   legSummaries: LegSummary[];
   chanceOfProfit: number | null;
+  isUnlimitedProfit: boolean;
+  isUnlimitedLoss: boolean;
 }
 
 function rrPct(profit: number, loss: number): string {
@@ -54,8 +56,9 @@ export function GreeksDisplay({
   priceTarget,
   legSummaries,
   chanceOfProfit,
+  isUnlimitedProfit,
+  isUnlimitedLoss,
 }: GreeksDisplayProps) {
-  const isUnlimitedProfit = maxProfit > 100000;
   const absMaxLoss = Math.abs(maxLoss);
   const hasTarget = profitAtTarget !== null && priceTarget !== null && priceTarget > 0;
   const showLegs = legSummaries.length > 1;
@@ -104,7 +107,7 @@ export function GreeksDisplay({
         />
         <MetricCell
           label="Max Loss"
-          value={formatCurrency(maxLoss)}
+          value={isUnlimitedLoss ? "Unlimited" : formatCurrency(maxLoss)}
           className="text-red-600 dark:text-red-400"
         />
         <MetricCell
