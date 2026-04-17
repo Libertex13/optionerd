@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import type { StrategyLeg } from "@/types/options";
 import { isOptionLeg } from "@/types/options";
 import { blackScholesPrice } from "@/lib/pricing/black-scholes";
 import { DEFAULT_RISK_FREE_RATE, CALENDAR_DAYS_PER_YEAR } from "@/lib/utils/constants";
+
+type DisplayMode = "$" | "%";
 
 interface PnLHeatmapProps {
   legs: StrategyLeg[];
@@ -23,7 +25,6 @@ const PRICE_RANGE_PCT = 0.20;
 
 /**
  * Generate evenly-spaced dates from today through expiration.
- * Returns array of { label, dte } where dte = days to expiry at that column.
  */
 function generateDateColumns(totalDte: number): { label: string; dte: number }[] {
   const cols: { label: string; dte: number }[] = [];
@@ -62,6 +63,28 @@ function generatePriceRows(currentPrice: number): number[] {
 }
 
 /**
+ * Calculate the total cost basis (max risk / capital deployed) for the position.
+ * For debit positions: net premium paid.
+ * For credit positions: margin requirement approximation (we use the net credit as the basis).
+ * For stock legs: shares * entry price.
+ */
+function calculateCostBasis(legs: StrategyLeg[]): number {
+  let totalDebit = 0;
+
+  for (const leg of legs) {
+    if (isOptionLeg(leg)) {
+      const multiplier = leg.positionType === "long" ? 1 : -1;
+      totalDebit += leg.premium * multiplier * leg.quantity * 100;
+    } else {
+      const multiplier = leg.positionType === "long" ? 1 : -1;
+      totalDebit += leg.entryPrice * multiplier * leg.quantity;
+    }
+  }
+
+  return Math.abs(totalDebit);
+}
+
+/**
  * Calculate total P&L for a set of legs at a given underlying price and DTE.
  */
 function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number): number {
@@ -72,13 +95,11 @@ function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number)
       const multiplier = leg.positionType === "long" ? 1 : -1;
 
       if (dte <= 0) {
-        // At expiration — intrinsic value
         const intrinsic = leg.optionType === "call"
           ? Math.max(underlyingPrice - leg.strikePrice, 0)
           : Math.max(leg.strikePrice - underlyingPrice, 0);
         totalPnl += (intrinsic * multiplier - leg.premium * multiplier) * leg.quantity * 100;
       } else {
-        // Before expiration — Black-Scholes theoretical value
         const timeToExpiry = dte / CALENDAR_DAYS_PER_YEAR;
         const theoreticalPrice = blackScholesPrice({
           spotPrice: underlyingPrice,
@@ -91,7 +112,6 @@ function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number)
         totalPnl += (theoreticalPrice - leg.premium) * multiplier * leg.quantity * 100;
       }
     } else {
-      // Stock leg
       const multiplier = leg.positionType === "long" ? 1 : -1;
       totalPnl += (underlyingPrice - leg.entryPrice) * multiplier * leg.quantity;
     }
@@ -101,32 +121,29 @@ function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number)
 }
 
 /**
- * Map a P&L value to a background color.
- * Green for profit, red for loss, with intensity based on magnitude.
+ * Map a value to a background color based on the display mode.
  */
-function pnlColor(pnl: number, maxAbsPnl: number): string {
-  if (maxAbsPnl === 0) return "transparent";
-  const intensity = Math.min(Math.abs(pnl) / maxAbsPnl, 1);
+function cellColor(value: number, maxAbsValue: number): string {
+  if (maxAbsValue === 0) return "transparent";
+  const intensity = Math.min(Math.abs(value) / maxAbsValue, 1);
 
-  if (pnl > 0) {
+  if (value > 0) {
     const alpha = 0.08 + intensity * 0.72;
     return `rgba(34, 197, 94, ${alpha.toFixed(3)})`;
-  } else if (pnl < 0) {
+  } else if (value < 0) {
     const alpha = 0.08 + intensity * 0.72;
     return `rgba(239, 68, 68, ${alpha.toFixed(3)})`;
   }
   return "transparent";
 }
 
-/** Pick text color for readability on the colored background */
-function textColor(pnl: number, maxAbsPnl: number): string {
-  if (maxAbsPnl === 0) return "var(--color-foreground)";
-  const intensity = Math.min(Math.abs(pnl) / maxAbsPnl, 1);
+function textColor(value: number, maxAbsValue: number): string {
+  if (maxAbsValue === 0) return "var(--color-foreground)";
+  const intensity = Math.min(Math.abs(value) / maxAbsValue, 1);
   return intensity > 0.5 ? "white" : "var(--color-foreground)";
 }
 
-/** Format P&L for cell display — compact for small cells */
-function formatPnl(pnl: number): string {
+function formatDollar(pnl: number): string {
   const abs = Math.abs(pnl);
   const sign = pnl >= 0 ? "" : "-";
   if (abs >= 10000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
@@ -136,20 +153,34 @@ function formatPnl(pnl: number): string {
   return "$0";
 }
 
+function formatPercent(pct: number): string {
+  const sign = pct >= 0 ? "+" : "";
+  if (Math.abs(pct) >= 1000) return `${sign}${Math.round(pct)}%`;
+  if (Math.abs(pct) >= 100) return `${sign}${Math.round(pct)}%`;
+  if (Math.abs(pct) >= 10) return `${sign}${pct.toFixed(0)}%`;
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
 export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps) {
-  const { dateColumns, priceRows, grid, maxAbsPnl } = useMemo(() => {
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("$");
+
+  const { dateColumns, priceRows, grid, costBasis, maxAbsDollar, maxAbsPct } = useMemo(() => {
     const dateCols = generateDateColumns(daysToExpiry);
     const prices = generatePriceRows(currentPrice);
+    const basis = calculateCostBasis(legs);
 
-    let maxAbs = 0;
-    const gridData: number[][] = [];
+    let maxDollar = 0;
+    let maxPct = 0;
+    const gridData: { pnl: number; pct: number }[][] = [];
 
     for (const price of prices) {
-      const row: number[] = [];
+      const row: { pnl: number; pct: number }[] = [];
       for (const col of dateCols) {
         const pnl = calculatePnL(legs, price, col.dte);
-        row.push(pnl);
-        if (Math.abs(pnl) > maxAbs) maxAbs = Math.abs(pnl);
+        const pct = basis > 0 ? (pnl / basis) * 100 : 0;
+        row.push({ pnl, pct });
+        if (Math.abs(pnl) > maxDollar) maxDollar = Math.abs(pnl);
+        if (Math.abs(pct) > maxPct) maxPct = Math.abs(pct);
       }
       gridData.push(row);
     }
@@ -158,62 +189,96 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
       dateColumns: dateCols,
       priceRows: prices,
       grid: gridData,
-      maxAbsPnl: maxAbs,
+      costBasis: basis,
+      maxAbsDollar: maxDollar,
+      maxAbsPct: maxPct,
     };
   }, [legs, currentPrice, daysToExpiry]);
 
+  const maxAbs = displayMode === "$" ? maxAbsDollar : maxAbsPct;
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse font-mono text-xs">
-        <thead>
-          <tr>
-            <th className="sticky left-0 z-10 bg-card px-2 py-1.5 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-              Price
-            </th>
-            {dateColumns.map((col, i) => (
-              <th
-                key={i}
-                className="px-1.5 py-1.5 text-center text-[10px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
-              >
-                {col.label}
+    <div className="space-y-2">
+      {/* Toggle */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+          {displayMode === "%" && costBasis > 0
+            ? `Return on $${costBasis.toLocaleString("en-US", { maximumFractionDigits: 0 })} risk`
+            : "\u00A0"}
+        </span>
+        <div className="inline-flex rounded-md border border-border overflow-hidden">
+          {(["$", "%"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setDisplayMode(mode)}
+              className={`px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
+                displayMode === mode
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse font-mono text-xs">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-card px-2 py-1.5 text-right text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                Price
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {priceRows.map((price, rowIdx) => {
-            const isNearCurrent = Math.abs(price - currentPrice) / currentPrice < 0.012;
-            return (
-              <tr key={rowIdx}>
-                <td
-                  className={`sticky left-0 z-10 bg-card px-2 py-1 text-right font-medium whitespace-nowrap border-r border-border ${
-                    isNearCurrent
-                      ? "text-foreground font-bold"
-                      : "text-muted-foreground"
-                  }`}
+              {dateColumns.map((col, i) => (
+                <th
+                  key={i}
+                  className="px-1.5 py-1.5 text-center text-[10px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
                 >
-                  ${price.toFixed(2)}
-                  {isNearCurrent && (
-                    <span className="ml-1 text-[9px] text-primary font-semibold">&#9664;</span>
-                  )}
-                </td>
-                {grid[rowIdx].map((pnl, colIdx) => (
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {priceRows.map((price, rowIdx) => {
+              const isNearCurrent = Math.abs(price - currentPrice) / currentPrice < 0.012;
+              return (
+                <tr key={rowIdx}>
                   <td
-                    key={colIdx}
-                    className="px-1 py-1 text-center font-medium tabular-nums"
-                    style={{
-                      backgroundColor: pnlColor(pnl, maxAbsPnl),
-                      color: textColor(pnl, maxAbsPnl),
-                    }}
+                    className={`sticky left-0 z-10 bg-card px-2 py-1 text-right font-medium whitespace-nowrap border-r border-border ${
+                      isNearCurrent
+                        ? "text-foreground font-bold"
+                        : "text-muted-foreground"
+                    }`}
                   >
-                    {formatPnl(pnl)}
+                    ${price.toFixed(2)}
+                    {isNearCurrent && (
+                      <span className="ml-1 text-[9px] text-primary font-semibold">&#9664;</span>
+                    )}
                   </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  {grid[rowIdx].map((cell, colIdx) => {
+                    const value = displayMode === "$" ? cell.pnl : cell.pct;
+                    return (
+                      <td
+                        key={colIdx}
+                        className="px-1 py-1 text-center font-medium tabular-nums"
+                        style={{
+                          backgroundColor: cellColor(value, maxAbs),
+                          color: textColor(value, maxAbs),
+                        }}
+                      >
+                        {displayMode === "$" ? formatDollar(cell.pnl) : formatPercent(cell.pct)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
