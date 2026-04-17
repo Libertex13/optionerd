@@ -14,6 +14,7 @@ import { TickerSearch } from "./TickerSearch";
 import { PayoffDiagram } from "./PayoffDiagram";
 import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
+import { SaveTradeButton } from "./SaveTradeButton";
 import type { OptionChain, OptionContract } from "@/types/market";
 import type { OptionType, PositionType, OptionLeg } from "@/types/options";
 import { priceOption } from "@/lib/pricing/black-scholes";
@@ -815,26 +816,48 @@ export function OptionsCalculator({
               </div>
             )}
 
-            {/* Add Leg / Add Shares */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={addLeg}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                + Add leg
-              </button>
-              {!stockLeg && (
+            {/* Add Leg / Add Shares / Save */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => {
-                    const price = chain?.underlyingPrice ?? 0;
-                    setStockLeg({ positionType: "long", quantity: 100, entryPrice: price });
-                    setStockQtyInput("100");
-                    setStockPriceInput(price.toFixed(2));
-                  }}
+                  onClick={addLeg}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  + Add shares
+                  + Add leg
                 </button>
+                {!stockLeg && (
+                  <button
+                    onClick={() => {
+                      const price = chain?.underlyingPrice ?? 0;
+                      setStockLeg({ positionType: "long", quantity: 100, entryPrice: price });
+                      setStockQtyInput("100");
+                      setStockPriceInput(price.toFixed(2));
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    + Add shares
+                  </button>
+                )}
+              </div>
+              {chain && legs.length > 0 && (
+                <SaveTradeButton
+                  ticker={chain.ticker}
+                  underlyingPrice={chain.underlyingPrice}
+                  legs={legs.map((l) => ({
+                    option_type: l.optionType,
+                    position_type: l.positionType,
+                    strike_price: l.contract.strikePrice,
+                    premium: l.premium,
+                    quantity: l.quantity,
+                    expiration_date: l.contract.expirationDate,
+                    implied_volatility: l.contract.impliedVolatility || 0.3,
+                  }))}
+                  stockLeg={stockLeg ? {
+                    position_type: stockLeg.positionType,
+                    quantity: stockLeg.quantity,
+                    entry_price: stockLeg.entryPrice,
+                  } : null}
+                />
               )}
             </div>
 

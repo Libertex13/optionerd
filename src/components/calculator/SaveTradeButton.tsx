@@ -1,0 +1,103 @@
+"use client";
+
+import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useSavedTrades } from "@/hooks/useSavedTrades";
+import { AuthModal } from "@/components/auth/AuthModal";
+import type { SavedTradeLeg, SavedStockLeg } from "@/lib/supabase/types";
+
+interface SaveTradeButtonProps {
+  ticker: string;
+  underlyingPrice: number;
+  legs: SavedTradeLeg[];
+  stockLeg: SavedStockLeg | null;
+}
+
+export function SaveTradeButton({
+  ticker,
+  underlyingPrice,
+  legs,
+  stockLeg,
+}: SaveTradeButtonProps) {
+  const { user } = useAuth();
+  const { saveTrade } = useSavedTrades();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showNameInput, setShowNameInput] = useState(false);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    // Default name from the position
+    const legDesc = legs.map(
+      (l) => `${l.position_type === "long" ? "B" : "S"} ${l.option_type[0].toUpperCase()}${l.strike_price}`,
+    ).join(" / ");
+    setName(`${ticker} ${legDesc}`);
+    setShowNameInput(true);
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    const result = await saveTrade({
+      name: name.trim(),
+      ticker,
+      underlying_price: underlyingPrice,
+      legs,
+      stock_leg: stockLeg,
+    });
+    setSaving(false);
+    if (result) {
+      setSaved(true);
+      setShowNameInput(false);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
+  return (
+    <>
+      {showNameInput ? (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+            placeholder="Trade name"
+            autoFocus
+            className="h-7 w-40 rounded-sm border border-input bg-transparent px-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-sm bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "..." : "Save"}
+          </button>
+          <button
+            onClick={() => setShowNameInput(false)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleClick}
+          className={`text-xs transition-colors ${
+            saved
+              ? "text-green-600 dark:text-green-400 font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {saved ? "Saved!" : user ? "Save trade" : "Sign in to save"}
+        </button>
+      )}
+      <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+    </>
+  );
+}

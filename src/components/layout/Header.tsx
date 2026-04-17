@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { MobileNav } from "@/components/layout/MobileNav";
 
 export function Header() {
@@ -40,8 +40,11 @@ export function Header() {
           </Link>
           <span className="h-4 w-px bg-border" />
           <ThemeToggle />
+          <span className="h-4 w-px bg-border" />
+          <UserMenu />
         </nav>
         <div className="flex md:hidden items-center gap-3">
+          <UserMenu />
           <ThemeToggle />
           <MobileNav />
         </div>
