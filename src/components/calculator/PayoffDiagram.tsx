@@ -87,7 +87,7 @@ export function PayoffDiagram({
   }
 
   return (
-    <div className="h-[400px] w-full md:h-[440px]">
+    <div className="h-100 w-full md:h-110">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={enhanced} margin={{ top: 20, right: 30, left: 10, bottom: 30 }}>
           <defs>

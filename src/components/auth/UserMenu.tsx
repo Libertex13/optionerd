@@ -58,7 +58,7 @@ export function UserMenu() {
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
           {initial}
         </div>
-        <span className="hidden sm:inline text-xs font-medium truncate max-w-[120px]">
+        <span className="hidden sm:inline text-xs font-medium truncate max-w-30">
           {displayName}
         </span>
       </button>
