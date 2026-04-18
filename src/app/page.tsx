@@ -30,6 +30,12 @@ export default function HomePage() {
               {label}
             </Link>
           ))}
+          <Link
+            href="/strategies"
+            className="rounded-sm border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            All strategies &rarr;
+          </Link>
         </div>
       </section>
 

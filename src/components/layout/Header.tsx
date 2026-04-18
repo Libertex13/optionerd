@@ -27,8 +27,8 @@ export function Header() {
           />
         </Link>
         <nav className="hidden md:flex items-center gap-5 font-mono text-sm text-muted-foreground">
-          <Link href="/calculator/long-call" className="hover:text-foreground transition-colors">
-            Long Call
+          <Link href="/strategies" className="hover:text-foreground transition-colors">
+            Strategies
           </Link>
           <span className="h-4 w-px bg-border" />
           <Link href="/calculator/iron-condor" className="hover:text-foreground transition-colors">

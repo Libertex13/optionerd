@@ -214,8 +214,8 @@ export interface MarketView {
 }
 
 export const marketViews: MarketView[] = [
-  { id: "bullish", label: "Bullish", hint: "Up and to the right", tag: "\u2197", shape: "up" },
-  { id: "bearish", label: "Bearish", hint: "Down and to the left", tag: "\u2198", shape: "down" },
+  { id: "bullish", label: "Bullish", hint: "Expecting the stock to rise", tag: "\u2197", shape: "up" },
+  { id: "bearish", label: "Bearish", hint: "Expecting the stock to decline", tag: "\u2198", shape: "down" },
   { id: "neutral", label: "Range-bound", hint: "Sideways, stays in a channel", tag: "\u2192", shape: "flat" },
   { id: "volatile", label: "Big move, either way", hint: "Earnings, FDA, binary event", tag: "\u2195", shape: "vol" },
 ];

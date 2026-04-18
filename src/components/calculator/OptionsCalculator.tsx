@@ -631,19 +631,6 @@ export function OptionsCalculator({
 
   return (
     <div className="space-y-3">
-      {/* Strategy Picker — shown when no chain is loaded */}
-      {!chain && (
-        <Card>
-          <CardContent className="pt-6">
-            <StrategyPicker
-              onSelectTemplate={() => {
-                // No chain yet — just a visual preview
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-
       {/* Ticker Search */}
       <Card className="overflow-visible">
         <CardHeader>
@@ -677,19 +664,6 @@ export function OptionsCalculator({
           activeTemplate={activeTemplate}
           onSelectTemplate={applyTemplate}
         />
-      )}
-
-      {/* Strategy Picker — shown below template strip when chain is loaded */}
-      {chain && (
-        <Card>
-          <CardContent className="pt-6">
-            <StrategyPicker
-              ticker={chain.ticker}
-              price={chain.underlyingPrice}
-              onSelectTemplate={applyTemplate}
-            />
-          </CardContent>
-        </Card>
       )}
 
       {/* Position Builder */}
