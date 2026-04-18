@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -52,12 +52,34 @@ interface StockLegConfig {
   entryPrice: number;
 }
 
+/** A saved trade to pre-fill the calculator with */
+interface SavedTradeInput {
+  ticker: string;
+  underlyingPrice: number;
+  legs: {
+    option_type: "call" | "put";
+    position_type: "long" | "short";
+    strike_price: number;
+    premium: number;
+    quantity: number;
+    expiration_date: string;
+    implied_volatility: number;
+  }[];
+  stock_leg: {
+    position_type: "long" | "short";
+    quantity: number;
+    entry_price: number;
+  } | null;
+}
+
 interface OptionsCalculatorProps {
   defaultOptionType?: OptionType;
   defaultPositionType?: PositionType;
   includeStockLeg?: boolean;
   /** Slug of strategy template to auto-select when a chain loads */
   defaultTemplate?: string;
+  /** Pre-fill from a saved trade — auto-loads chain and matches contracts */
+  savedTrade?: SavedTradeInput;
 }
 
 export function OptionsCalculator({
@@ -65,6 +87,7 @@ export function OptionsCalculator({
   defaultPositionType = "long",
   includeStockLeg = false,
   defaultTemplate,
+  savedTrade,
 }: OptionsCalculatorProps) {
   const [chain, setChain] = useState<OptionChain | null>(null);
   const [isLoadingChain, setIsLoadingChain] = useState(false);
@@ -249,6 +272,78 @@ export function OptionsCalculator({
       setIsLoadingChain(false);
     }
   };
+
+  // Auto-load a saved trade on mount
+  const [savedTradeLoaded, setSavedTradeLoaded] = useState(false);
+  useEffect(() => {
+    if (!savedTrade || savedTradeLoaded) return;
+    setSavedTradeLoaded(true);
+
+    (async () => {
+      setIsLoadingChain(true);
+      setChainError(null);
+
+      try {
+        const response = await fetch(`/api/options/chain?ticker=${savedTrade.ticker}`);
+        if (!response.ok) throw new Error("Failed to fetch options chain");
+
+        const data: OptionChain = await response.json();
+        setChain(data);
+
+        // Match saved legs to live chain contracts
+        const newLegs: SelectedLeg[] = [];
+        for (const savedLeg of savedTrade.legs) {
+          const expiryData = data.expirations.find(
+            (e) => e.expirationDate === savedLeg.expiration_date,
+          );
+          if (!expiryData) {
+            // Expiry no longer available — find closest
+            const closest = data.expirations.reduce((best, e) =>
+              Math.abs(new Date(e.expirationDate).getTime() - new Date(savedLeg.expiration_date).getTime()) <
+              Math.abs(new Date(best.expirationDate).getTime() - new Date(savedLeg.expiration_date).getTime())
+                ? e : best,
+            );
+            if (!closest) continue;
+            const contracts = savedLeg.option_type === "call" ? closest.calls : closest.puts;
+            const contract = contracts.reduce((best, c) =>
+              Math.abs(c.strikePrice - savedLeg.strike_price) < Math.abs(best.strikePrice - savedLeg.strike_price)
+                ? c : best,
+            );
+            newLegs.push(makeLeg(contract, savedLeg.option_type, savedLeg.position_type, data, closest.expirationDate, savedLeg.quantity));
+          } else {
+            const contracts = savedLeg.option_type === "call" ? expiryData.calls : expiryData.puts;
+            // Find exact strike or closest
+            const contract = contracts.reduce((best, c) =>
+              Math.abs(c.strikePrice - savedLeg.strike_price) < Math.abs(best.strikePrice - savedLeg.strike_price)
+                ? c : best,
+            );
+            newLegs.push(makeLeg(contract, savedLeg.option_type, savedLeg.position_type, data, expiryData.expirationDate, savedLeg.quantity));
+          }
+        }
+
+        if (newLegs.length > 0) {
+          setLegs(newLegs);
+          setActiveLegIndex(0);
+          setQtyInput(String(newLegs[0].quantity));
+        }
+
+        // Restore stock leg
+        if (savedTrade.stock_leg) {
+          setStockLeg({
+            positionType: savedTrade.stock_leg.position_type,
+            quantity: savedTrade.stock_leg.quantity,
+            entryPrice: savedTrade.stock_leg.entry_price,
+          });
+          setStockQtyInput(String(savedTrade.stock_leg.quantity));
+          setStockPriceInput(savedTrade.stock_leg.entry_price.toFixed(2));
+        }
+      } catch {
+        setChainError("Could not load options chain for saved trade.");
+      } finally {
+        setIsLoadingChain(false);
+      }
+    })();
+  }, [savedTrade, savedTradeLoaded, makeLeg]);
 
   // All dropdown handlers update the ACTIVE leg
   const handleExpiryChange = (expiry: string) => {

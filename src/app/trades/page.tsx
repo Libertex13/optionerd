@@ -33,9 +33,9 @@ function TradeCard({
   const dateStr = `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getDate().toString().padStart(2, "0")}/${date.getFullYear()}`;
 
   return (
-    <div className="rounded-md border border-border bg-card overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden hover:border-primary/40 transition-colors">
       <div className="flex items-start justify-between gap-3 px-4 py-3">
-        <div className="min-w-0 flex-1">
+        <Link href={`/trades/${trade.id}`} className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-bold">{trade.ticker}</span>
             <span className="text-xs text-muted-foreground">
@@ -74,7 +74,7 @@ function TradeCard({
               {trade.notes}
             </p>
           )}
-        </div>
+        </Link>
         <div className="flex items-center gap-2 shrink-0">
           {confirming ? (
             <>
