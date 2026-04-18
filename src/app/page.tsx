@@ -17,6 +17,10 @@ export default function HomePage() {
             { href: "/calculator/long-call", label: "Long Call" },
             { href: "/calculator/long-put", label: "Long Put" },
             { href: "/calculator/covered-call", label: "Covered Call" },
+            { href: "/calculator/bull-call-spread", label: "Bull Call Spread" },
+            { href: "/calculator/iron-condor", label: "Iron Condor" },
+            { href: "/calculator/long-straddle", label: "Straddle" },
+            { href: "/calculator/iron-butterfly", label: "Iron Butterfly" },
           ].map(({ href, label }) => (
             <Link
               key={href}

@@ -5,6 +5,7 @@ import {
   getStrategyBySlug,
   getAllStrategySlugs,
 } from "@/lib/strategies/definitions";
+import { strategyTemplates } from "@/lib/strategies/templates";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
@@ -113,6 +114,7 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
           defaultOptionType={def.defaultOptionType}
           defaultPositionType={def.defaultPositionType}
           includeStockLeg={def.includeStockLeg}
+          defaultTemplate={strategyTemplates[def.slug] ? def.slug : undefined}
         />
 
         <Separator className="my-12" />

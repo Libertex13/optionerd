@@ -15,6 +15,9 @@ import { PayoffDiagram } from "./PayoffDiagram";
 import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
 import { SaveTradeButton } from "./SaveTradeButton";
+import { StrategyPicker } from "./StrategyPicker";
+import { TemplateStrip } from "./TemplateStrip";
+import { TimeSlider } from "./TimeSlider";
 import type { OptionChain, OptionContract } from "@/types/market";
 import type { OptionType, PositionType, OptionLeg } from "@/types/options";
 import { priceOption } from "@/lib/pricing/black-scholes";
@@ -30,6 +33,7 @@ import {
   CALENDAR_DAYS_PER_YEAR,
 } from "@/lib/utils/constants";
 import { formatCurrency } from "@/lib/utils/formatting";
+import { strategyTemplates } from "@/lib/strategies/templates";
 
 /** A selected leg with its source contract and position config */
 interface SelectedLeg {
@@ -52,12 +56,15 @@ interface OptionsCalculatorProps {
   defaultOptionType?: OptionType;
   defaultPositionType?: PositionType;
   includeStockLeg?: boolean;
+  /** Slug of strategy template to auto-select when a chain loads */
+  defaultTemplate?: string;
 }
 
 export function OptionsCalculator({
   defaultOptionType = "call",
   defaultPositionType = "long",
   includeStockLeg = false,
+  defaultTemplate,
 }: OptionsCalculatorProps) {
   const [chain, setChain] = useState<OptionChain | null>(null);
   const [isLoadingChain, setIsLoadingChain] = useState(false);
@@ -71,6 +78,7 @@ export function OptionsCalculator({
   );
   const [stockQtyInput, setStockQtyInput] = useState<string>(includeStockLeg ? "100" : "");
   const [stockPriceInput, setStockPriceInput] = useState<string>("");
+  const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
 
   const activeLeg = legs[activeLegIndex] ?? null;
 
@@ -176,24 +184,63 @@ export function OptionsCalculator({
         setStockPriceInput("");
       }
 
-      const expiry = getDefaultExpiry(data);
-      if (expiry) {
-        const atm = findAtmContract(
-          data,
-          expiry.expirationDate,
-          defaultOptionType,
-        );
-        if (atm) {
-          setLegs([
-            makeLeg(
-              atm,
-              defaultOptionType,
-              defaultPositionType,
-              data,
-              expiry.expirationDate,
-              1,
-            ),
-          ]);
+      // If a default template is set (from strategy page), apply it after chain loads
+      if (defaultTemplate && strategyTemplates[defaultTemplate]) {
+        const tpl = strategyTemplates[defaultTemplate];
+        const expiry = getDefaultExpiry(data);
+        if (expiry) {
+          const newLegs: SelectedLeg[] = [];
+          for (const tplLeg of tpl.legs) {
+            const targetStrike = data.underlyingPrice + tplLeg.strikeOffset;
+            const expiryData = data.expirations.find(
+              (e) => e.expirationDate === expiry.expirationDate,
+            );
+            if (!expiryData) continue;
+            const contracts =
+              tplLeg.type === "call" ? expiryData.calls : expiryData.puts;
+            if (contracts.length === 0) continue;
+            const contract = contracts.reduce((closest, c) =>
+              Math.abs(c.strikePrice - targetStrike) <
+              Math.abs(closest.strikePrice - targetStrike)
+                ? c
+                : closest,
+            );
+            newLegs.push(
+              makeLeg(contract, tplLeg.type, tplLeg.side, data, expiry.expirationDate, tplLeg.quantity),
+            );
+          }
+          if (newLegs.length > 0) {
+            setLegs(newLegs);
+            setActiveLegIndex(0);
+            setQtyInput(String(newLegs[0].quantity));
+          }
+          if (tpl.includeStock) {
+            setStockLeg({ positionType: "long", quantity: 100, entryPrice: data.underlyingPrice });
+            setStockQtyInput("100");
+            setStockPriceInput(data.underlyingPrice.toFixed(2));
+          }
+          setActiveTemplate(defaultTemplate);
+        }
+      } else {
+        const expiry = getDefaultExpiry(data);
+        if (expiry) {
+          const atm = findAtmContract(
+            data,
+            expiry.expirationDate,
+            defaultOptionType,
+          );
+          if (atm) {
+            setLegs([
+              makeLeg(
+                atm,
+                defaultOptionType,
+                defaultPositionType,
+                data,
+                expiry.expirationDate,
+                1,
+              ),
+            ]);
+          }
         }
       }
     } catch {
@@ -298,6 +345,78 @@ export function OptionsCalculator({
     setLegs((prev) => [...prev, newLeg]);
     switchToLeg(legs.length); // select the new leg
   };
+
+  const applyTemplate = useCallback(
+    (templateSlug: string) => {
+      if (!chain) return;
+      if (!templateSlug) {
+        setActiveTemplate(null);
+        return;
+      }
+      const tpl = strategyTemplates[templateSlug];
+      if (!tpl) return;
+
+      const expiry = getDefaultExpiry(chain);
+      if (!expiry) return;
+
+      // Build legs from template
+      const newLegs: SelectedLeg[] = [];
+      for (const tplLeg of tpl.legs) {
+        const targetStrike = chain.underlyingPrice + tplLeg.strikeOffset;
+        const expiryData = chain.expirations.find(
+          (e) => e.expirationDate === expiry.expirationDate,
+        );
+        if (!expiryData) continue;
+
+        const contracts =
+          tplLeg.type === "call" ? expiryData.calls : expiryData.puts;
+        if (contracts.length === 0) continue;
+
+        // Find closest strike to target
+        const contract = contracts.reduce((closest, c) =>
+          Math.abs(c.strikePrice - targetStrike) <
+          Math.abs(closest.strikePrice - targetStrike)
+            ? c
+            : closest,
+        );
+
+        newLegs.push(
+          makeLeg(
+            contract,
+            tplLeg.type,
+            tplLeg.side,
+            chain,
+            expiry.expirationDate,
+            tplLeg.quantity,
+          ),
+        );
+      }
+
+      if (newLegs.length > 0) {
+        setLegs(newLegs);
+        setActiveLegIndex(0);
+        setQtyInput(String(newLegs[0].quantity));
+      }
+
+      // Handle stock leg
+      if (tpl.includeStock) {
+        setStockLeg({
+          positionType: "long",
+          quantity: 100,
+          entryPrice: chain.underlyingPrice,
+        });
+        setStockQtyInput("100");
+        setStockPriceInput(chain.underlyingPrice.toFixed(2));
+      } else {
+        setStockLeg(null);
+        setStockQtyInput("");
+        setStockPriceInput("");
+      }
+
+      setActiveTemplate(templateSlug);
+    },
+    [chain, makeLeg],
+  );
 
   const removeLeg = (index: number) => {
     setLegs((prev) => prev.filter((_, i) => i !== index));
@@ -512,6 +631,19 @@ export function OptionsCalculator({
 
   return (
     <div className="space-y-3">
+      {/* Strategy Picker — shown when no chain is loaded */}
+      {!chain && (
+        <Card>
+          <CardContent className="pt-6">
+            <StrategyPicker
+              onSelectTemplate={() => {
+                // No chain yet — just a visual preview
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Ticker Search */}
       <Card className="overflow-visible">
         <CardHeader>
@@ -538,6 +670,27 @@ export function OptionsCalculator({
           )}
         </CardContent>
       </Card>
+
+      {/* Template Strip — shown when chain is loaded */}
+      {chain && (
+        <TemplateStrip
+          activeTemplate={activeTemplate}
+          onSelectTemplate={applyTemplate}
+        />
+      )}
+
+      {/* Strategy Picker — shown below template strip when chain is loaded */}
+      {chain && (
+        <Card>
+          <CardContent className="pt-6">
+            <StrategyPicker
+              ticker={chain.ticker}
+              price={chain.underlyingPrice}
+              onSelectTemplate={applyTemplate}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Position Builder */}
       {chain && (
@@ -989,6 +1142,19 @@ export function OptionsCalculator({
               data={payoffData}
               breakEvenPoints={breakEvenPoints}
               currentPrice={chain.underlyingPrice}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Time Slider — payoff over time */}
+      {strategyLegs.length > 0 && chain && maxDte > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <TimeSlider
+              legs={strategyLegs}
+              currentPrice={chain.underlyingPrice}
+              daysToExpiry={maxDte}
             />
           </CardContent>
         </Card>

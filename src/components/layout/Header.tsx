@@ -31,8 +31,12 @@ export function Header() {
             Long Call
           </Link>
           <span className="h-4 w-px bg-border" />
-          <Link href="/calculator/long-put" className="hover:text-foreground transition-colors">
-            Long Put
+          <Link href="/calculator/iron-condor" className="hover:text-foreground transition-colors">
+            Iron Condor
+          </Link>
+          <span className="h-4 w-px bg-border" />
+          <Link href="/calculator/bull-call-spread" className="hover:text-foreground transition-colors">
+            Spreads
           </Link>
           <span className="h-4 w-px bg-border" />
           <Link href="/calculator/covered-call" className="hover:text-foreground transition-colors">
