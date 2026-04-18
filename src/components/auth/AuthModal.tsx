@@ -47,7 +47,8 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
 
   const handleGoogleSignIn = async () => {
     setError(null);
-    await signInWithGoogle();
+    const { error: err } = await signInWithGoogle();
+    if (err) setError(err);
   };
 
   const resetForm = () => {

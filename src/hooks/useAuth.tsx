@@ -17,7 +17,7 @@ interface AuthContext {
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -77,21 +77,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase.auth],
   );
 
-  const signInWithGoogle = useCallback(async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    // The browser client should auto-redirect, but if it doesn't
-    // (e.g. stub client or popup blocked), navigate manually.
-    if (error) {
-      console.error("Google sign-in error:", error.message);
-      return;
-    }
-    if (data?.url) {
-      window.location.href = data.url;
+  const signInWithGoogle = useCallback(async (): Promise<{ error: string | null }> => {
+    try {
+      const result = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (result.error) {
+        console.error("Google sign-in error:", result.error.message);
+        return { error: result.error.message };
+      }
+      if (result.data?.url) {
+        window.location.href = result.data.url;
+      }
+      return { error: null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("Google sign-in exception:", msg);
+      return { error: msg };
     }
   }, [supabase.auth]);
 
