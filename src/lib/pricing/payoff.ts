@@ -194,32 +194,23 @@ export function calculateMaxProfitLoss(payoffPoints: PayoffPoint[]): {
 
   // Detect unbounded profit/loss: if P&L is still increasing (or decreasing)
   // at the edges of the simulated range, the position is theoretically unlimited.
+  // Only the UPPER end (price → ∞) can be truly unlimited. The lower end
+  // (price → $0) is always bounded because stock can't go negative, so losses
+  // deepening toward $0 (e.g., covered call, long stock) are large but finite.
   const n = payoffPoints.length;
   const isUnlimitedProfit =
     n >= 3 &&
-    (
-      // Profit still increasing at upper end (e.g., long call, short put)
-      (payoffPoints[n - 1].profitLoss > payoffPoints[n - 2].profitLoss &&
-       payoffPoints[n - 2].profitLoss > payoffPoints[n - 3].profitLoss &&
-       payoffPoints[n - 1].profitLoss > 0) ||
-      // Profit still increasing at lower end (e.g., long put with no floor in sim)
-      (payoffPoints[0].profitLoss > payoffPoints[1].profitLoss &&
-       payoffPoints[1].profitLoss > payoffPoints[2].profitLoss &&
-       payoffPoints[0].profitLoss > 0)
-    );
+    // Profit still increasing at upper end (e.g., long call, long stock)
+    payoffPoints[n - 1].profitLoss > payoffPoints[n - 2].profitLoss &&
+    payoffPoints[n - 2].profitLoss > payoffPoints[n - 3].profitLoss &&
+    payoffPoints[n - 1].profitLoss > 0;
 
   const isUnlimitedLoss =
     n >= 3 &&
-    (
-      // Loss still deepening at upper end (e.g., naked short call)
-      (payoffPoints[n - 1].profitLoss < payoffPoints[n - 2].profitLoss &&
-       payoffPoints[n - 2].profitLoss < payoffPoints[n - 3].profitLoss &&
-       payoffPoints[n - 1].profitLoss < 0) ||
-      // Loss still deepening at lower end (e.g., naked short put)
-      (payoffPoints[0].profitLoss < payoffPoints[1].profitLoss &&
-       payoffPoints[1].profitLoss < payoffPoints[2].profitLoss &&
-       payoffPoints[0].profitLoss < 0)
-    );
+    // Loss still deepening at upper end (e.g., naked short call)
+    payoffPoints[n - 1].profitLoss < payoffPoints[n - 2].profitLoss &&
+    payoffPoints[n - 2].profitLoss < payoffPoints[n - 3].profitLoss &&
+    payoffPoints[n - 1].profitLoss < 0;
 
   return { maxProfit, maxLoss, maxProfitPrice, maxLossPrice, isUnlimitedProfit, isUnlimitedLoss };
 }
