@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "./AuthModal";
+import { STRIPE_CUSTOMER_PORTAL_LINK } from "@/lib/stripe/config";
 
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
@@ -75,6 +76,20 @@ export function UserMenu() {
           >
             Saved trades
           </Link>
+          <Link
+            href="/account"
+            onClick={() => setShowDropdown(false)}
+            className="block w-full px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+          >
+            Account
+          </Link>
+          <a
+            href={STRIPE_CUSTOMER_PORTAL_LINK}
+            onClick={() => setShowDropdown(false)}
+            className="block w-full px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+          >
+            Manage billing
+          </a>
           <button
             onClick={() => {
               signOut();

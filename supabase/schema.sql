@@ -8,6 +8,10 @@ create table public.profiles (
   id uuid references auth.users on delete cascade primary key,
   email text not null,
   display_name text,
+  plan text not null default 'casual',
+  stripe_customer_id text unique,
+  plan_period text,
+  plan_expires_at timestamptz,
   created_at timestamptz default now() not null
 );
 

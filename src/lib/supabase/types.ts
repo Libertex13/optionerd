@@ -36,10 +36,17 @@ export interface SavedStockLeg {
   entry_price: number;
 }
 
+export type Plan = "casual" | "nerd";
+export type PlanPeriod = "monthly" | "yearly";
+
 export interface UserProfile {
   id: string;
   email: string;
   display_name: string | null;
+  plan: Plan;
+  stripe_customer_id: string | null;
+  plan_period: PlanPeriod | null;
+  plan_expires_at: string | null;
   created_at: string;
 }
 

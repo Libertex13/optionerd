@@ -42,10 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (_event: string, newSession: Session | null) => {
+      (authEvent: string, newSession: Session | null) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setLoading(false);
+
+        // Create Stripe customer when user is authenticated (idempotent — skips if exists)
+        if (
+          (authEvent === "SIGNED_IN" || authEvent === "INITIAL_SESSION") &&
+          newSession?.user
+        ) {
+          fetch("/api/stripe/customer", { method: "POST" }).catch(() => {
+            // Non-critical — customer will be created on next sign-in
+          });
+        }
       },
     );
 

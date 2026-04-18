@@ -8,6 +8,7 @@ const links = [
   { href: "/calculator/long-call", label: "Long Call" },
   { href: "/calculator/long-put", label: "Long Put" },
   { href: "/calculator/covered-call", label: "Covered Call" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 export function MobileNav() {

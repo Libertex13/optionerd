@@ -43,6 +43,10 @@ export function Header() {
             Covered Call
           </Link>
           <span className="h-4 w-px bg-border" />
+          <Link href="/pricing" className="hover:text-foreground transition-colors">
+            Pricing
+          </Link>
+          <span className="h-4 w-px bg-border" />
           <ThemeToggle />
           <span className="h-4 w-px bg-border" />
           <UserMenu />
