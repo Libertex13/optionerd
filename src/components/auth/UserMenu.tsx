@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthModal } from "./AuthModal";
 
@@ -67,6 +68,13 @@ export function UserMenu() {
             <p className="text-xs font-medium truncate">{displayName}</p>
             <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
           </div>
+          <Link
+            href="/trades"
+            onClick={() => setShowDropdown(false)}
+            className="block w-full px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+          >
+            Saved trades
+          </Link>
           <button
             onClick={() => {
               signOut();
