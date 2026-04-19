@@ -97,7 +97,7 @@ export function StrategyPicker({
                 {view.tag}
               </span>
             </div>
-            <div className="h-[54px]">
+            <div className="h-13.5">
               <PayoffShape shape={view.shape} />
             </div>
             <span className="text-[11.5px] text-muted-foreground">
@@ -151,7 +151,7 @@ export function StrategyPicker({
                 </div>
               </div>
 
-              <div className="h-[78px]">
+              <div className="h-19.5">
                 <PayoffShape
                   shape={tpl.shape}
                   width={300}
@@ -179,7 +179,7 @@ export function StrategyPicker({
                 </div>
                 <button
                   onClick={() => onSelectTemplate(templateSlug)}
-                  className="h-[26px] px-2.5 text-[11.5px] font-medium border border-border rounded-[3px] bg-card-foreground/5 dark:bg-card-foreground/10 hover:bg-accent transition-colors"
+                  className="h-6.5 px-2.5 text-[11.5px] font-medium border border-border rounded-[3px] bg-card-foreground/5 dark:bg-card-foreground/10 hover:bg-accent transition-colors"
                 >
                   Build &rarr;
                 </button>

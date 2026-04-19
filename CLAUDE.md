@@ -283,6 +283,7 @@ SUPABASE_SERVICE_ROLE_KEY=xxx
 - Descriptive variable names — `annualizedVolatility` not `vol`, `strikePrice` not `k`
 - All financial calculations in `lib/pricing/` — keep components pure display logic
 - Test pricing functions (Black-Scholes, Greeks) against known values
+- Prefer canonical Tailwind spacing/sizing tokens over arbitrary values. On the v4 scale 1 unit = 0.25rem = 4px, so `h-[380px]` → `h-95`, `h-[3px]` → `h-0.75`, `w-[32px]` → `w-8`. Only reach for arbitrary values when no canonical token lines up exactly.
 
 ---
 

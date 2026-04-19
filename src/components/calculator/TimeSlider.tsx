@@ -225,7 +225,7 @@ export function TimeSlider({
           </span>
         </div>
 
-        <div className="h-[380px] w-full">
+        <div className="h-95 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={enhanced}
@@ -406,7 +406,7 @@ export function TimeSlider({
           value={dayElapsed}
           step={1}
           onChange={(e) => setDayElapsed(parseInt(e.target.value))}
-          className="w-full h-[3px] bg-border rounded-sm appearance-none cursor-pointer
+          className="w-full h-0.75 bg-border rounded-sm appearance-none cursor-pointer
             [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
             [&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer
             [&::-webkit-slider-thumb]:shadow-[0_0_0_3px_var(--color-background)]
