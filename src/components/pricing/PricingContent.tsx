@@ -213,12 +213,12 @@ export function PricingContent() {
           </p>
 
           {/* Row 2: Billing toggle */}
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 inline-flex rounded-md border border-border p-0.5">
             <button
               onClick={() => setBillingPeriod("monthly")}
-              className={`rounded-sm px-2 py-1 font-mono text-xs transition-colors ${
+              className={`rounded-sm px-4 py-1.5 font-mono text-xs transition-colors ${
                 billingPeriod === "monthly"
-                  ? "bg-secondary text-foreground"
+                  ? "bg-secondary text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -226,9 +226,9 @@ export function PricingContent() {
             </button>
             <button
               onClick={() => setBillingPeriod("yearly")}
-              className={`rounded-sm px-2 py-1 font-mono text-xs transition-colors ${
+              className={`rounded-sm px-4 py-1.5 font-mono text-xs transition-colors ${
                 billingPeriod === "yearly"
-                  ? "bg-secondary text-foreground"
+                  ? "bg-secondary text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -237,7 +237,7 @@ export function PricingContent() {
                 variant="outline"
                 className="ml-1.5 font-mono text-[10px]"
               >
-                save {SAVE_PCT}%
+                -{SAVE_PCT}%
               </Badge>
             </button>
           </div>
@@ -256,13 +256,13 @@ export function PricingContent() {
             ) : (
               <>
                 <span className="font-mono text-3xl font-bold">
-                  ${ANNUAL_MONTHLY.toFixed(2)}
+                  ${Math.floor(ANNUAL_MONTHLY)}
                 </span>
                 <span className="ml-1 text-sm text-muted-foreground">
                   /month
                 </span>
                 <span className="ml-2 text-xs text-muted-foreground">
-                  (${ANNUAL}/yr, billed annually)
+                  billed annually at ${ANNUAL}
                 </span>
               </>
             )}
