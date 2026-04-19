@@ -3,11 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { usePlan } from "@/hooks/usePlan";
 import { AuthModal } from "./AuthModal";
+import { Badge } from "@/components/ui/badge";
 import { STRIPE_CUSTOMER_PORTAL_LINK } from "@/lib/stripe/config";
 
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
+  const { isNerd } = usePlan();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -66,7 +69,15 @@ export function UserMenu() {
       {showDropdown && (
         <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card shadow-lg py-1 z-50">
           <div className="px-3 py-2 border-b border-border">
-            <p className="text-xs font-medium truncate">{displayName}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-medium truncate">{displayName}</p>
+              <Badge
+                variant={isNerd ? "default" : "secondary"}
+                className="font-mono text-[9px] px-1 h-3.5"
+              >
+                {isNerd ? "NERD" : "CASUAL"}
+              </Badge>
+            </div>
             <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
           </div>
           <Link

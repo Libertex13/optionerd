@@ -13,6 +13,10 @@ interface SaveTradeInput {
   tags?: string[];
 }
 
+export type SaveTradeResult =
+  | { success: true; trade: SavedTrade }
+  | { success: false; upgrade: boolean; message: string };
+
 export function useSavedTrades() {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,7 +34,7 @@ export function useSavedTrades() {
     }
   }, []);
 
-  const saveTrade = useCallback(async (input: SaveTradeInput): Promise<SavedTrade | null> => {
+  const saveTrade = useCallback(async (input: SaveTradeInput): Promise<SaveTradeResult> => {
     const res = await fetch("/api/trades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,9 +44,19 @@ export function useSavedTrades() {
     if (res.ok) {
       const trade = await res.json();
       setTrades((prev) => [trade, ...prev]);
-      return trade;
+      return { success: true, trade };
     }
-    return null;
+
+    if (res.status === 403) {
+      const data = await res.json();
+      return {
+        success: false,
+        upgrade: data.upgrade ?? false,
+        message: data.message ?? "Save limit reached",
+      };
+    }
+
+    return { success: false, upgrade: false, message: "Failed to save trade" };
   }, []);
 
   const updateTrade = useCallback(async (id: string, input: Partial<SaveTradeInput>): Promise<SavedTrade | null> => {

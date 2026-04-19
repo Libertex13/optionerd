@@ -18,7 +18,9 @@ import { SaveTradeButton } from "./SaveTradeButton";
 import { StrategyPicker } from "./StrategyPicker";
 import { TemplateStrip } from "./TemplateStrip";
 import { TimeSlider } from "./TimeSlider";
-import type { OptionChain, OptionContract } from "@/types/market";
+import { MaxPainDisplay } from "./MaxPainDisplay";
+import { NerdGate } from "@/components/billing/NerdGate";
+import type { OptionChain, OptionChainExpiry, OptionContract } from "@/types/market";
 import type { OptionType, PositionType, OptionLeg } from "@/types/options";
 import { priceOption } from "@/lib/pricing/black-scholes";
 import { calculateGreeks } from "@/lib/pricing/greeks";
@@ -1246,6 +1248,24 @@ export function OptionsCalculator({
           </CardContent>
         </Card>
       )}
+
+      {/* Max Pain (Nerd-gated) */}
+      {chain && legs.length > 0 && (() => {
+        const activeExpiryDate = legs[0].contract.expirationDate;
+        const expiry: OptionChainExpiry | undefined = chain.expirations.find(
+          (e) => e.expirationDate === activeExpiryDate,
+        );
+        if (!expiry) return null;
+        return (
+          <NerdGate feature="Max Pain">
+            <MaxPainDisplay
+              calls={expiry.calls}
+              puts={expiry.puts}
+              currentPrice={chain.underlyingPrice}
+            />
+          </NerdGate>
+        );
+      })()}
 
       {/* Greeks & Summary */}
       {pricingResult && (
