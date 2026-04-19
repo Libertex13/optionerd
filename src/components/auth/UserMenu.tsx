@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePlan } from "@/hooks/usePlan";
 import { AuthModal } from "./AuthModal";
 import { Badge } from "@/components/ui/badge";
-import { STRIPE_CUSTOMER_PORTAL_LINK } from "@/lib/stripe/config";
+import { getPortalLink } from "@/lib/stripe/config";
 
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
@@ -95,7 +95,7 @@ export function UserMenu() {
             Account
           </Link>
           <a
-            href={STRIPE_CUSTOMER_PORTAL_LINK}
+            href={getPortalLink(user.email)}
             onClick={() => setShowDropdown(false)}
             className="block w-full px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
           >

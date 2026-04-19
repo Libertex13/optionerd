@@ -8,7 +8,7 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import {
   STRIPE_NERD_MONTHLY_LINK,
   STRIPE_NERD_YEARLY_LINK,
-  STRIPE_CUSTOMER_PORTAL_LINK,
+  getPortalLink,
 } from "@/lib/stripe/config";
 import { createClient } from "@/lib/supabase/client";
 import type { Plan } from "@/lib/supabase/types";
@@ -114,7 +114,7 @@ export function PricingContent() {
 
   const handleUpgrade = () => {
     if (isNerd) {
-      window.location.href = STRIPE_CUSTOMER_PORTAL_LINK;
+      window.location.href = getPortalLink(user?.email);
       return;
     }
     if (!user) {

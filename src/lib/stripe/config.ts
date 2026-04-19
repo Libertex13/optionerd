@@ -30,7 +30,14 @@ export const STRIPE_NERD_YEARLY_LINK = isProd
   ? process.env.NEXT_PUBLIC_STRIPE_NERD_YEARLY_LINK_PROD!
   : process.env.NEXT_PUBLIC_STRIPE_NERD_YEARLY_LINK_DEV!;
 
-/** Client-safe */
+/** Client-safe — base URL, use getPortalLink() to include email */
 export const STRIPE_CUSTOMER_PORTAL_LINK = isProd
   ? process.env.NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_LINK_PROD!
   : process.env.NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_LINK_DEV!;
+
+/** Returns the portal link with prefilled_email if provided */
+export function getPortalLink(email?: string | null): string {
+  if (!STRIPE_CUSTOMER_PORTAL_LINK) return "#";
+  if (!email) return STRIPE_CUSTOMER_PORTAL_LINK;
+  return `${STRIPE_CUSTOMER_PORTAL_LINK}?prefilled_email=${encodeURIComponent(email)}`;
+}

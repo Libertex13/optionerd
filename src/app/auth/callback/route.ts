@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * OAuth callback handler.
- * Exchanges the auth code for a session, then redirects to the app.
+ * Exchanges the auth code for a session, then redirects.
+ * New users (first sign-in) go to /pricing, returning users go to `next` or /.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -14,6 +15,20 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Check if this is a brand new user (created in the last 30 seconds)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const createdAt = new Date(user.created_at).getTime();
+        const isNewUser = Date.now() - createdAt < 30_000;
+
+        if (isNewUser) {
+          return NextResponse.redirect(`${origin}/pricing`);
+        }
+      }
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

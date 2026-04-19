@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
-import { STRIPE_CUSTOMER_PORTAL_LINK } from "@/lib/stripe/config";
+import { getPortalLink } from "@/lib/stripe/config";
 import { Badge } from "@/components/ui/badge";
 import type { Plan, PlanPeriod } from "@/lib/supabase/types";
 import { DeleteAccountModal } from "./DeleteAccountModal";
@@ -143,7 +143,7 @@ export function AccountContent() {
         <div className="mt-4 flex gap-2">
           {isNerd ? (
             <a
-              href={STRIPE_CUSTOMER_PORTAL_LINK}
+              href={getPortalLink(profile.email)}
               className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 h-8 text-sm font-medium hover:bg-muted transition-all"
             >
               Manage subscription
@@ -170,7 +170,7 @@ export function AccountContent() {
             Stripe Customer Portal.
           </p>
           <a
-            href={STRIPE_CUSTOMER_PORTAL_LINK}
+            href={getPortalLink(profile.email)}
             className="mt-3 inline-flex items-center justify-center rounded-md border border-border bg-background px-3 h-8 text-sm font-medium hover:bg-muted transition-all"
           >
             View billing history
