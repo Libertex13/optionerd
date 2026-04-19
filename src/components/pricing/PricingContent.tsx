@@ -90,7 +90,7 @@ export function PricingContent() {
   const { user } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">(
-    "monthly",
+    "yearly",
   );
   const [plan, setPlan] = useState<Plan>("casual");
 
@@ -256,13 +256,13 @@ export function PricingContent() {
             ) : (
               <>
                 <span className="font-mono text-3xl font-bold">
-                  ${ANNUAL}
+                  ${ANNUAL_MONTHLY.toFixed(2)}
                 </span>
                 <span className="ml-1 text-sm text-muted-foreground">
-                  /year
+                  /month
                 </span>
                 <span className="ml-2 text-xs text-muted-foreground">
-                  (${ANNUAL_MONTHLY.toFixed(2)}/mo)
+                  (${ANNUAL}/yr, billed annually)
                 </span>
               </>
             )}

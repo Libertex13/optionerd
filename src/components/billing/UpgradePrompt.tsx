@@ -33,7 +33,7 @@ interface UpgradePromptProps {
 export function UpgradePrompt({ open, onClose, feature }: UpgradePromptProps) {
   const { user } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
-  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [period, setPeriod] = useState<"monthly" | "yearly">("yearly");
 
   if (!open) return null;
 
