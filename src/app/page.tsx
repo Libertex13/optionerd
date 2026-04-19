@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { OptionsCalculator } from "@/components/calculator/OptionsCalculator";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default function HomePage() {
   return (

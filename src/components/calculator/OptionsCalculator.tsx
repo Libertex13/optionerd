@@ -15,6 +15,7 @@ import { PayoffDiagram } from "./PayoffDiagram";
 import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
 import { SaveTradeButton } from "./SaveTradeButton";
+import { ShareTradeButton } from "./ShareTradeButton";
 import { StrategyPicker } from "./StrategyPicker";
 import { TemplateStrip } from "./TemplateStrip";
 import { TimeSlider } from "./TimeSlider";
@@ -36,6 +37,7 @@ import {
 } from "@/lib/utils/constants";
 import { formatCurrency } from "@/lib/utils/formatting";
 import { strategyTemplates } from "@/lib/strategies/templates";
+import { decodeStrategy } from "@/lib/share/encode";
 import type { OptionChainExpiry } from "@/types/market";
 
 /* ------------------------------------------------------------------ */
@@ -141,6 +143,24 @@ export function OptionsCalculator({
   defaultTemplate,
   savedTrade,
 }: OptionsCalculatorProps) {
+  // Decode ?s= from URL on mount (client-only). Lets any route that renders
+  // OptionsCalculator accept a shared-strategy link without threading params.
+  const [sharedFromUrl, setSharedFromUrl] = useState<SavedTradeInput | null>(null);
+  useEffect(() => {
+    if (savedTrade) return;
+    const encoded = new URLSearchParams(window.location.search).get("s");
+    if (!encoded) return;
+    const decoded = decodeStrategy(encoded);
+    if (!decoded) return;
+    setSharedFromUrl({
+      ticker: decoded.ticker,
+      underlyingPrice: decoded.underlyingPrice,
+      legs: decoded.legs,
+      stock_leg: decoded.stockLeg,
+    });
+  }, [savedTrade]);
+  const effectiveSavedTrade = savedTrade ?? sharedFromUrl;
+
   const [chain, setChain] = useState<OptionChain | null>(null);
   const [isLoadingChain, setIsLoadingChain] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
@@ -327,10 +347,10 @@ export function OptionsCalculator({
     }
   };
 
-  // Auto-load a saved trade on mount
+  // Auto-load a saved or URL-shared trade on mount
   const [savedTradeLoaded, setSavedTradeLoaded] = useState(false);
   useEffect(() => {
-    if (!savedTrade || savedTradeLoaded) return;
+    if (!effectiveSavedTrade || savedTradeLoaded) return;
     setSavedTradeLoaded(true);
 
     (async () => {
@@ -338,7 +358,7 @@ export function OptionsCalculator({
       setChainError(null);
 
       try {
-        const response = await fetch(`/api/options/chain?ticker=${savedTrade.ticker}`);
+        const response = await fetch(`/api/options/chain?ticker=${effectiveSavedTrade.ticker}`);
         if (!response.ok) throw new Error("Failed to fetch options chain");
 
         const data: OptionChain = await response.json();
@@ -346,7 +366,7 @@ export function OptionsCalculator({
 
         // Match saved legs to live chain contracts
         const newLegs: SelectedLeg[] = [];
-        for (const savedLeg of savedTrade.legs) {
+        for (const savedLeg of effectiveSavedTrade.legs) {
           const expiryData = data.expirations.find(
             (e) => e.expirationDate === savedLeg.expiration_date,
           );
@@ -382,14 +402,14 @@ export function OptionsCalculator({
         }
 
         // Restore stock leg
-        if (savedTrade.stock_leg) {
+        if (effectiveSavedTrade.stock_leg) {
           setStockLeg({
-            positionType: savedTrade.stock_leg.position_type,
-            quantity: savedTrade.stock_leg.quantity,
-            entryPrice: savedTrade.stock_leg.entry_price,
+            positionType: effectiveSavedTrade.stock_leg.position_type,
+            quantity: effectiveSavedTrade.stock_leg.quantity,
+            entryPrice: effectiveSavedTrade.stock_leg.entry_price,
           });
-          setStockQtyInput(String(savedTrade.stock_leg.quantity));
-          setStockPriceInput(savedTrade.stock_leg.entry_price.toFixed(2));
+          setStockQtyInput(String(effectiveSavedTrade.stock_leg.quantity));
+          setStockPriceInput(effectiveSavedTrade.stock_leg.entry_price.toFixed(2));
         }
       } catch {
         setChainError("Could not load options chain for saved trade.");
@@ -397,7 +417,7 @@ export function OptionsCalculator({
         setIsLoadingChain(false);
       }
     })();
-  }, [savedTrade, savedTradeLoaded, makeLeg]);
+  }, [effectiveSavedTrade, savedTradeLoaded, makeLeg]);
 
   // All dropdown handlers update the ACTIVE leg
   const handleExpiryChange = (expiry: string) => {
@@ -1122,26 +1142,38 @@ export function OptionsCalculator({
                   </button>
                 )}
               </div>
-              {chain && legs.length > 0 && (
-                <SaveTradeButton
-                  ticker={chain.ticker}
-                  underlyingPrice={chain.underlyingPrice}
-                  legs={legs.map((l) => ({
-                    option_type: l.optionType,
-                    position_type: l.positionType,
-                    strike_price: l.contract.strikePrice,
-                    premium: l.premium,
-                    quantity: l.quantity,
-                    expiration_date: l.contract.expirationDate,
-                    implied_volatility: l.contract.impliedVolatility || 0.3,
-                  }))}
-                  stockLeg={stockLeg ? {
-                    position_type: stockLeg.positionType,
-                    quantity: stockLeg.quantity,
-                    entry_price: stockLeg.entryPrice,
-                  } : null}
-                />
-              )}
+              {chain && legs.length > 0 && (() => {
+                const tradeLegs = legs.map((l) => ({
+                  option_type: l.optionType,
+                  position_type: l.positionType,
+                  strike_price: l.contract.strikePrice,
+                  premium: l.premium,
+                  quantity: l.quantity,
+                  expiration_date: l.contract.expirationDate,
+                  implied_volatility: l.contract.impliedVolatility || 0.3,
+                }));
+                const tradeStockLeg = stockLeg ? {
+                  position_type: stockLeg.positionType,
+                  quantity: stockLeg.quantity,
+                  entry_price: stockLeg.entryPrice,
+                } : null;
+                return (
+                  <div className="flex items-center gap-3">
+                    <ShareTradeButton
+                      ticker={chain.ticker}
+                      underlyingPrice={chain.underlyingPrice}
+                      legs={tradeLegs}
+                      stockLeg={tradeStockLeg}
+                    />
+                    <SaveTradeButton
+                      ticker={chain.ticker}
+                      underlyingPrice={chain.underlyingPrice}
+                      legs={tradeLegs}
+                      stockLeg={tradeStockLeg}
+                    />
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Price Target */}

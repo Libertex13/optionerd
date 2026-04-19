@@ -28,6 +28,9 @@ export async function generateMetadata({
   return {
     title: def.title,
     description: def.metaDescription,
+    alternates: {
+      canonical: `/calculator/${def.slug}`,
+    },
     openGraph: {
       title: def.title,
       description: def.metaDescription,

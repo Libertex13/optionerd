@@ -6,6 +6,7 @@ import { useSavedTrades } from "@/hooks/useSavedTrades";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 import type { SavedTradeLeg, SavedStockLeg } from "@/lib/supabase/types";
+import { buildShareUrl } from "@/lib/share/url";
 
 interface SaveTradeButtonProps {
   ticker: string;
@@ -29,6 +30,8 @@ export function SaveTradeButton({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleClick = () => {
     if (!user) {
@@ -62,6 +65,7 @@ export function SaveTradeButton({
     if (result.success) {
       setSaved(true);
       setShowNameInput(false);
+      setShareUrl(buildShareUrl({ ticker, underlyingPrice, legs, stockLeg }));
       setTimeout(() => setSaved(false), 2000);
     } else if (result.upgrade) {
       setShowNameInput(false);
@@ -102,6 +106,36 @@ export function SaveTradeButton({
           {error && (
             <span className="text-[10px] text-destructive">{error}</span>
           )}
+        </div>
+      ) : shareUrl ? (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+            Saved!
+          </span>
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shareUrl);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              } catch {
+                /* no-op */
+              }
+            }}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {linkCopied ? "Copied!" : "Copy share link"}
+          </button>
+          <button
+            onClick={() => {
+              setShareUrl(null);
+              setLinkCopied(false);
+            }}
+            className="text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            x
+          </button>
         </div>
       ) : (
         <button
