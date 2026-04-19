@@ -148,33 +148,29 @@ export function PricingContent() {
       <div className="grid gap-4 md:grid-cols-2">
         {/* Casual */}
         <div className="flex flex-col rounded-md border border-border bg-card p-5">
-          {/* Row 1: Name + description */}
           <h2 className="font-mono text-lg font-bold">Casual</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Everything you need to analyze options trades. No account
             required.
           </p>
 
-          {/* Row 2: Billing toggle (empty spacer to match Nerd) */}
-          <div className="mt-4 h-7" />
+          <div className="mt-auto pt-6">
+            <div className="mb-1">
+              <span className="font-mono text-3xl font-bold">$0</span>
+              <span className="ml-1 text-sm text-muted-foreground">
+                forever
+              </span>
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">&nbsp;</p>
 
-          {/* Row 3: Price */}
-          <div className="mb-4">
-            <span className="font-mono text-3xl font-bold">$0</span>
-            <span className="ml-1 text-sm text-muted-foreground">
-              forever
-            </span>
+            <Link
+              href="/calculator/long-call"
+              className="inline-flex w-full items-center justify-center rounded-md border border-border bg-background px-2.5 h-9 text-sm font-medium hover:bg-muted hover:text-foreground transition-all"
+            >
+              Start calculating
+            </Link>
           </div>
 
-          {/* Row 4: CTA */}
-          <Link
-            href="/calculator/long-call"
-            className="inline-flex w-full items-center justify-center rounded-md border border-border bg-background px-2.5 h-8 text-sm font-medium hover:bg-muted hover:text-foreground transition-all"
-          >
-            Start calculating
-          </Link>
-
-          {/* Row 5: Features */}
           <ul className="mt-5 space-y-2 text-sm">
             <li className="flex items-center gap-2">
               <Check className="size-4 text-foreground shrink-0" />
@@ -201,7 +197,6 @@ export function PricingContent() {
 
         {/* Nerd */}
         <div className="flex flex-col rounded-md border-2 border-foreground bg-card p-5">
-          {/* Row 1: Name + description */}
           <div className="flex items-center gap-2">
             <h2 className="font-mono text-lg font-bold">Nerd</h2>
             <Badge variant="secondary" className="font-mono text-[10px]">
@@ -212,71 +207,76 @@ export function PricingContent() {
             Connect your brokerage, get AI analysis, and never hit a limit.
           </p>
 
-          {/* Row 2: Billing toggle */}
-          <div className="mt-4 inline-flex rounded-md border border-border p-0.5">
+          <div className="mt-auto pt-6">
+            {/* Billing toggle */}
+            <div className="mb-3 flex items-center">
+              <div className="inline-flex rounded-md border border-border p-0.5">
+                <button
+                  onClick={() => setBillingPeriod("monthly")}
+                  className={`rounded-sm px-3 py-1 font-mono text-xs transition-colors ${
+                    billingPeriod === "monthly"
+                      ? "bg-secondary text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setBillingPeriod("yearly")}
+                  className={`rounded-sm px-3 py-1 font-mono text-xs transition-colors ${
+                    billingPeriod === "yearly"
+                      ? "bg-secondary text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Yearly
+                </button>
+              </div>
+              {billingPeriod === "yearly" && (
+                <Badge
+                  variant="outline"
+                  className="ml-2 font-mono text-[10px] text-green-600 dark:text-green-400 border-green-600/30 dark:border-green-400/30"
+                >
+                  save {SAVE_PCT}%
+                </Badge>
+              )}
+            </div>
+
+            <div className="mb-1">
+              {billingPeriod === "monthly" ? (
+                <>
+                  <span className="font-mono text-3xl font-bold">
+                    ${MONTHLY}
+                  </span>
+                  <span className="ml-1 text-sm text-muted-foreground">
+                    /month
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-mono text-3xl font-bold">
+                    ${Math.floor(ANNUAL_MONTHLY)}
+                  </span>
+                  <span className="ml-1 text-sm text-muted-foreground">
+                    /month
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              {billingPeriod === "yearly"
+                ? `$${ANNUAL} billed annually`
+                : "cancel anytime"}
+            </p>
+
             <button
-              onClick={() => setBillingPeriod("monthly")}
-              className={`rounded-sm px-4 py-1.5 font-mono text-xs transition-colors ${
-                billingPeriod === "monthly"
-                  ? "bg-secondary text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={handleUpgrade}
+              className="inline-flex w-full items-center justify-center rounded-md bg-primary text-primary-foreground px-2.5 h-9 text-sm font-medium hover:bg-primary/80 transition-all"
             >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBillingPeriod("yearly")}
-              className={`rounded-sm px-4 py-1.5 font-mono text-xs transition-colors ${
-                billingPeriod === "yearly"
-                  ? "bg-secondary text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Yearly
-              <Badge
-                variant="outline"
-                className="ml-1.5 font-mono text-[10px]"
-              >
-                -{SAVE_PCT}%
-              </Badge>
+              {isNerd ? "Manage subscription" : "Upgrade to Nerd"}
             </button>
           </div>
 
-          {/* Row 3: Price */}
-          <div className="mb-4">
-            {billingPeriod === "monthly" ? (
-              <>
-                <span className="font-mono text-3xl font-bold">
-                  ${MONTHLY}
-                </span>
-                <span className="ml-1 text-sm text-muted-foreground">
-                  /month
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-mono text-3xl font-bold">
-                  ${Math.floor(ANNUAL_MONTHLY)}
-                </span>
-                <span className="ml-1 text-sm text-muted-foreground">
-                  /month
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  billed annually at ${ANNUAL}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Row 4: CTA */}
-          <button
-            onClick={handleUpgrade}
-            className="inline-flex w-full items-center justify-center rounded-md bg-primary text-primary-foreground px-2.5 h-8 text-sm font-medium hover:bg-primary/80 transition-all"
-          >
-            {isNerd ? "Manage subscription" : "Upgrade to Nerd"}
-          </button>
-
-          {/* Row 5: Features */}
           <ul className="mt-5 space-y-2 text-sm">
             <li className="flex items-center gap-2">
               <Check className="size-4 text-foreground shrink-0" />
