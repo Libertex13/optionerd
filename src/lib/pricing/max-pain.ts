@@ -7,10 +7,33 @@ export interface MaxPainStrike {
   totalPain: number;
 }
 
+export interface OIByStrike {
+  strike: number;
+  callOI: number;
+  putOI: number;
+  totalOI: number;
+  /** Put/Call OI ratio at this strike */
+  pcRatio: number;
+}
+
 export interface MaxPainResult {
   maxPainStrike: number;
   totalPainAtMaxPain: number;
   painByStrike: MaxPainStrike[];
+  /** Open interest breakdown by strike */
+  oiByStrike: OIByStrike[];
+  /** Total call open interest across all strikes */
+  totalCallOI: number;
+  /** Total put open interest across all strikes */
+  totalPutOI: number;
+  /** Overall put/call OI ratio */
+  putCallRatio: number;
+  /** Strike with the highest total open interest */
+  highestOIStrike: number;
+  /** Total call pain across all strikes at max pain price */
+  callPainAtMaxPain: number;
+  /** Total put pain across all strikes at max pain price */
+  putPainAtMaxPain: number;
 }
 
 /**
@@ -44,18 +67,58 @@ export function calculateMaxPain(
 
   const strikes = Array.from(strikeSet).sort((a, b) => a - b);
 
+  // Build OI breakdown by strike
+  const callOIMap = new Map<number, number>();
+  const putOIMap = new Map<number, number>();
+  let totalCallOI = 0;
+  let totalPutOI = 0;
+
+  for (const c of calls) {
+    if (c.openInterest > 0) {
+      callOIMap.set(c.strikePrice, (callOIMap.get(c.strikePrice) ?? 0) + c.openInterest);
+      totalCallOI += c.openInterest;
+    }
+  }
+  for (const p of puts) {
+    if (p.openInterest > 0) {
+      putOIMap.set(p.strikePrice, (putOIMap.get(p.strikePrice) ?? 0) + p.openInterest);
+      totalPutOI += p.openInterest;
+    }
+  }
+
+  const oiByStrike: OIByStrike[] = strikes.map((strike) => {
+    const callOI = callOIMap.get(strike) ?? 0;
+    const putOI = putOIMap.get(strike) ?? 0;
+    return {
+      strike,
+      callOI,
+      putOI,
+      totalOI: callOI + putOI,
+      pcRatio: callOI > 0 ? putOI / callOI : putOI > 0 ? Infinity : 0,
+    };
+  });
+
+  // Find highest OI strike
+  let highestOIStrike = strikes[0];
+  let highestOI = 0;
+  for (const entry of oiByStrike) {
+    if (entry.totalOI > highestOI) {
+      highestOI = entry.totalOI;
+      highestOIStrike = entry.strike;
+    }
+  }
+
+  // Calculate pain at each candidate price
   const painByStrike: MaxPainStrike[] = strikes.map((candidatePrice) => {
     let callPain = 0;
     let putPain = 0;
 
-    // For each call: if candidatePrice > strike, call holders profit
     for (const call of calls) {
       if (call.openInterest > 0 && candidatePrice > call.strikePrice) {
         callPain += (candidatePrice - call.strikePrice) * call.openInterest * 100;
       }
     }
 
-    // For each put: if candidatePrice < strike, put holders profit
     for (const put of puts) {
       if (put.openInterest > 0 && candidatePrice < put.strikePrice) {
         putPain += (put.strikePrice - candidatePrice) * put.openInterest * 100;
@@ -81,9 +144,19 @@ export function calculateMaxPain(
     }
   }
 
+  // Get call/put pain breakdown at the max pain price
+  const maxPainEntry = painByStrike.find((e) => e.strike === maxPainStrike);
+
   return {
     maxPainStrike,
     totalPainAtMaxPain: minPain,
     painByStrike,
+    oiByStrike,
+    totalCallOI,
+    totalPutOI,
+    putCallRatio: totalCallOI > 0 ? totalPutOI / totalCallOI : 0,
+    highestOIStrike,
+    callPainAtMaxPain: maxPainEntry?.callPain ?? 0,
+    putPainAtMaxPain: maxPainEntry?.putPain ?? 0,
   };
 }

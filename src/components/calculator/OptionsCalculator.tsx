@@ -20,7 +20,7 @@ import { TemplateStrip } from "./TemplateStrip";
 import { TimeSlider } from "./TimeSlider";
 import { MaxPainDisplay } from "./MaxPainDisplay";
 import { NerdGate } from "@/components/billing/NerdGate";
-import type { OptionChain, OptionChainExpiry, OptionContract } from "@/types/market";
+import type { OptionChain, OptionContract } from "@/types/market";
 import type { OptionType, PositionType, OptionLeg } from "@/types/options";
 import { priceOption } from "@/lib/pricing/black-scholes";
 import { calculateGreeks } from "@/lib/pricing/greeks";
@@ -36,6 +36,56 @@ import {
 } from "@/lib/utils/constants";
 import { formatCurrency } from "@/lib/utils/formatting";
 import { strategyTemplates } from "@/lib/strategies/templates";
+import type { OptionChainExpiry } from "@/types/market";
+
+/* ------------------------------------------------------------------ */
+/*  Mock data for the gated Max Pain preview                           */
+/* ------------------------------------------------------------------ */
+
+function mockContract(strike: number, type: "call" | "put", oi: number): OptionContract {
+  return {
+    contractSymbol: `MOCK${strike}${type[0].toUpperCase()}`,
+    ticker: "MOCK",
+    expirationDate: "2026-05-15",
+    strikePrice: strike,
+    optionType: type,
+    bid: 1, ask: 1.2, last: 1.1, mid: 1.1,
+    volume: 100,
+    openInterest: oi,
+    impliedVolatility: 0.3,
+    delta: 0.5, gamma: 0.03, theta: -0.05, vega: 0.12, rho: 0.01,
+    inTheMoney: false,
+  };
+}
+
+const mockMaxPainExpirations: OptionChainExpiry[] = [
+  {
+    expirationDate: "2026-05-15",
+    daysToExpiry: 26,
+    calls: [
+      mockContract(155, "call", 3200), mockContract(160, "call", 5800),
+      mockContract(165, "call", 9400), mockContract(170, "call", 14200),
+      mockContract(175, "call", 11800), mockContract(180, "call", 7600),
+      mockContract(185, "call", 4100), mockContract(190, "call", 2300),
+      mockContract(195, "call", 1100),
+    ],
+    puts: [
+      mockContract(155, "put", 1400), mockContract(160, "put", 2800),
+      mockContract(165, "put", 5200), mockContract(170, "put", 8900),
+      mockContract(175, "put", 12600), mockContract(180, "put", 10100),
+      mockContract(185, "put", 6700), mockContract(190, "put", 3900),
+      mockContract(195, "put", 1800),
+    ],
+  },
+  {
+    expirationDate: "2026-06-19",
+    daysToExpiry: 61,
+    calls: [mockContract(170, "call", 8000), mockContract(175, "call", 6000), mockContract(180, "call", 4000)],
+    puts: [mockContract(170, "put", 7000), mockContract(175, "put", 9000), mockContract(180, "put", 5000)],
+  },
+];
+
+/* ------------------------------------------------------------------ */
 
 /** A selected leg with its source contract and position config */
 interface SelectedLeg {
@@ -104,6 +154,7 @@ export function OptionsCalculator({
   const [stockQtyInput, setStockQtyInput] = useState<string>(includeStockLeg ? "100" : "");
   const [stockPriceInput, setStockPriceInput] = useState<string>("");
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   const activeLeg = legs[activeLegIndex] ?? null;
 
@@ -185,9 +236,10 @@ export function OptionsCalculator({
       : data.expirations[0];
   };
 
-  const handleTickerSelect = async (ticker: string) => {
+  const handleTickerSelect = async (ticker: string, name?: string) => {
     setIsLoadingChain(true);
     setChainError(null);
+    setCompanyName(name ?? null);
     setLegs([]);
     switchToLeg(0);
 
@@ -744,13 +796,20 @@ export function OptionsCalculator({
             <p className="mt-2 text-xs text-red-500">{chainError}</p>
           )}
           {chain && (
-            <p className="mt-2 font-mono text-sm text-muted-foreground">
-              <span className="font-bold text-foreground">{chain.ticker}</span>{" "}
-              <span className="font-semibold text-foreground">
-                ${chain.underlyingPrice.toFixed(2)}
-              </span>{" "}
-              | {chain.expirations.length} exp
-            </p>
+            <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+              <div className="flex items-baseline gap-3">
+                <span className="font-mono text-base font-bold text-foreground">{chain.ticker}</span>
+                <span className="font-mono text-base font-semibold text-foreground">
+                  ${chain.underlyingPrice.toFixed(2)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {chain.expirations.length} expirations
+                </span>
+              </div>
+              {companyName && (
+                <p className="mt-0.5 text-xs text-muted-foreground truncate">{companyName}</p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1249,24 +1308,6 @@ export function OptionsCalculator({
         </Card>
       )}
 
-      {/* Max Pain (Nerd-gated) */}
-      {chain && legs.length > 0 && (() => {
-        const activeExpiryDate = legs[0].contract.expirationDate;
-        const expiry: OptionChainExpiry | undefined = chain.expirations.find(
-          (e) => e.expirationDate === activeExpiryDate,
-        );
-        if (!expiry) return null;
-        return (
-          <NerdGate feature="Max Pain">
-            <MaxPainDisplay
-              calls={expiry.calls}
-              puts={expiry.puts}
-              currentPrice={chain.underlyingPrice}
-            />
-          </NerdGate>
-        );
-      })()}
-
       {/* Greeks & Summary */}
       {pricingResult && (
         <GreeksDisplay
@@ -1283,6 +1324,20 @@ export function OptionsCalculator({
           isUnlimitedProfit={isUnlimitedProfit}
           isUnlimitedLoss={isUnlimitedLoss}
         />
+      )}
+
+      {/* Max Pain (Nerd-gated) */}
+      {chain && chain.expirations.length > 0 && (
+        <NerdGate
+          feature="Max Pain"
+          preview={<MaxPainDisplay expirations={mockMaxPainExpirations} currentPrice={175.50} />}
+        >
+          <MaxPainDisplay
+            expirations={chain.expirations}
+            currentPrice={chain.underlyingPrice}
+            defaultExpiry={legs.length > 0 ? legs[0].contract.expirationDate : undefined}
+          />
+        </NerdGate>
       )}
     </div>
   );

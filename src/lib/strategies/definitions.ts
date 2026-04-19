@@ -45,7 +45,7 @@ export const strategyDefinitions: Record<string, StrategyDefinition> = {
     risks: [
       "Time decay (theta) works against you — the option loses value every day",
       "If the stock doesn't move above the break-even by expiration, you lose your entire premium",
-      "High implied volatility means higher premiums, reducing your potential return",
+      "If IV is elevated when you buy, a subsequent IV crush can erode value even if the stock moves your way",
     ],
     educationalContent: `
 ## How a Long Call Works
@@ -88,7 +88,7 @@ Long calls provide leveraged bullish exposure. You can control 100 shares of sto
     risks: [
       "Time decay (theta) works against you",
       "If the stock doesn't drop below break-even, you lose your premium",
-      "Stocks tend to go up over time, making puts harder to profit from statistically",
+      "Volatility skew makes puts relatively expensive — you pay a premium for downside protection",
     ],
     educationalContent: `
 ## How a Long Put Works
@@ -449,7 +449,7 @@ AAPL at $195. Sell the $205 call for $2.20, sell the $185 put for $1.90. Total c
 - **AAPL at $170**: Put is $15 ITM. Loss = ($15 − $4.10) × 100 = **$1,090**.
 
 ### Key Takeaway
-Short strangles are high-probability, high-risk. You collect premium and profit ~71% of the time, but a tail event can wipe out months of gains. Many traders prefer the iron condor (wings added) for defined risk.
+Short strangles are high-probability, high-risk. The wider your strikes, the higher your probability of profit — but the lower your credit. A tail event can wipe out months of gains. Many traders prefer the iron condor (wings added) for defined risk.
     `,
   },
   "iron-condor": {

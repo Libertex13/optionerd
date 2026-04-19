@@ -34,7 +34,7 @@ export function TemplateStrip({
         )}
       </div>
       <div className="px-3 py-2.5">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
           {templateOrder.map((slug) => {
             const tpl = strategyTemplates[slug];
             if (!tpl) return null;

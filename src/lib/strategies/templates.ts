@@ -191,6 +191,7 @@ export const strategyTemplates: Record<string, StrategyTemplate> = {
 
 export const templateOrder = [
   "long-call",
+  "long-put",
   "bull-call-spread",
   "bull-put-spread",
   "bear-call-spread",
