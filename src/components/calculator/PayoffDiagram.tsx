@@ -89,7 +89,7 @@ export function PayoffDiagram({
   return (
     <div className="h-100 w-full md:h-110">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={enhanced} margin={{ top: 20, right: 30, left: 10, bottom: 30 }}>
+        <ComposedChart data={enhanced} margin={{ top: 20, right: 30, left: 10, bottom: 60 }}>
           <defs>
             <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22c55e" stopOpacity={0.18} />
@@ -115,7 +115,7 @@ export function PayoffDiagram({
             label={{
               value: "Underlying Price at Expiration",
               position: "insideBottom",
-              offset: -18,
+              offset: -48,
               fill: "var(--color-muted-foreground)",
               fontSize: 12,
             }}
@@ -154,15 +154,12 @@ export function PayoffDiagram({
             }}
           />
 
-          {/* Break-even */}
+          {/* Break-even — labels rendered below x-axis to avoid overlap with curve and Current */}
           {breakEvenPoints.map((be, i) => {
-            // Stagger labels vertically when break-evens are close together
             const tooClose = breakEvenPoints.some(
               (other, j) => j !== i && Math.abs(other - be) / currentPrice < 0.08
             );
-            const position = tooClose
-              ? (i % 2 === 0 ? "insideTopLeft" : "insideBottomRight")
-              : (i % 2 === 0 ? "insideTopLeft" : "insideTopRight");
+            const labelOffset = tooClose && i % 2 === 1 ? 34 : 18;
 
             return (
               <ReferenceLine
@@ -172,11 +169,11 @@ export function PayoffDiagram({
                 strokeDasharray="4 4"
                 label={{
                   value: `BE $${be.toFixed(2)}`,
-                  position,
+                  position: "bottom",
                   fill: "#737373",
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: 500,
-                  offset: 10,
+                  offset: labelOffset,
                 }}
               />
             );

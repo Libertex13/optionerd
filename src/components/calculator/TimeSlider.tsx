@@ -229,7 +229,7 @@ export function TimeSlider({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={enhanced}
-              margin={{ top: 20, right: 30, left: 10, bottom: 30 }}
+              margin={{ top: 20, right: 30, left: 10, bottom: 50 }}
             >
               <defs>
                 <linearGradient id="tsProfitFill" x1="0" y1="0" x2="0" y2="1">
@@ -298,23 +298,29 @@ export function TimeSlider({
                 }}
               />
 
-              {/* Break-evens */}
-              {breakEvens.map((be) => (
-                <ReferenceLine
-                  key={be}
-                  x={be}
-                  stroke="#a3a3a3"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: `BE $${be.toFixed(2)}`,
-                    position: "insideTopLeft",
-                    fill: "#737373",
-                    fontSize: 11,
-                    fontWeight: 500,
-                    offset: 10,
-                  }}
-                />
-              ))}
+              {/* Break-evens — labels rendered below x-axis to avoid overlap */}
+              {breakEvens.map((be, i) => {
+                const tooClose = breakEvens.some(
+                  (other, j) => j !== i && Math.abs(other - be) / currentPrice < 0.08,
+                );
+                const labelOffset = tooClose && i % 2 === 1 ? 32 : 18;
+                return (
+                  <ReferenceLine
+                    key={be}
+                    x={be}
+                    stroke="#a3a3a3"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `BE $${be.toFixed(2)}`,
+                      position: "bottom",
+                      fill: "#737373",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      offset: labelOffset,
+                    }}
+                  />
+                );
+              })}
 
               {/* Fills based on dated curve */}
               <Area
