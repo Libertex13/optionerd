@@ -70,7 +70,7 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
     <div ref={containerRef} className="relative">
       <Input
         type="text"
-        placeholder="Search ticker (AAPL, TSLA, SPY)..."
+        placeholder="Search ticker (AAPL, TSLA, NVDA)..."
         value={query}
         onChange={(e) => handleInputChange(e.target.value)}
         onKeyDown={(e) => {

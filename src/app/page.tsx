@@ -67,7 +67,7 @@ export default function HomePage() {
           <ol className="list-decimal space-y-1 pl-5">
             <li>
               <strong>Search for a ticker</strong> — Enter any US stock symbol (e.g., AAPL, TSLA,
-              SPY) to load the options chain.
+              NVDA) to load the options chain.
             </li>
             <li>
               <strong>Select your position</strong> — Choose buy/sell, call/put, expiration date,

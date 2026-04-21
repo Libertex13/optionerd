@@ -834,6 +834,99 @@ export function OptionsCalculator({
         </CardContent>
       </Card>
 
+      {/* Empty state — preview the position shape before a ticker is chosen */}
+      {!chain && !isLoadingChain && !chainError && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Position</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                waiting for ticker
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {(() => {
+                const tpl = defaultTemplate
+                  ? strategyTemplates[defaultTemplate]
+                  : null;
+                const placeholders = tpl?.legs ?? [
+                  {
+                    side: defaultPositionType,
+                    type: defaultOptionType,
+                    strikeOffset: 0,
+                    quantity: 1,
+                  },
+                ];
+                const showStock = tpl?.includeStock ?? includeStockLeg;
+                return (
+                  <>
+                    {showStock ? (
+                      <div className="flex items-center gap-3 rounded-md border border-dashed border-blue-500/50 bg-blue-500/5 py-2.5 px-3 font-mono text-sm text-muted-foreground">
+                        <span className="font-bold text-blue-600/70 dark:text-blue-400/70">
+                          SHARES
+                        </span>
+                        <span className="opacity-60">100 shares</span>
+                        <span className="opacity-60">@ $—</span>
+                      </div>
+                    ) : null}
+                    {placeholders.map((leg, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 rounded-md border border-dashed border-border bg-muted/20 py-2.5 px-3 font-mono text-sm text-muted-foreground"
+                      >
+                        <span className="w-5 text-center">{leg.quantity}</span>
+                        <span>x</span>
+                        <span
+                          className={
+                            leg.side === "long"
+                              ? "font-bold text-green-600/60 dark:text-green-400/60"
+                              : "font-bold text-red-600/60 dark:text-red-400/60"
+                          }
+                        >
+                          {leg.side === "long" ? "BUY" : "SELL"}
+                        </span>
+                        <span className="font-semibold">
+                          {leg.type === "call" ? "CALL" : "PUT"}
+                        </span>
+                        <span className="opacity-60">$strike</span>
+                        <span className="opacity-60">exp</span>
+                        <span className="opacity-60">@ $—</span>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
+              <button
+                type="button"
+                onClick={() => {
+                  const el =
+                    typeof document !== "undefined"
+                      ? (document.querySelector(
+                          '[data-ticker-search] input, input[role="combobox"], input[type="text"]',
+                        ) as HTMLInputElement | null)
+                      : null;
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    el.focus();
+                  }
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/10 py-2.5 text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+              >
+                <span className="font-mono text-base leading-none">+</span>
+                <span>Search a ticker above to build the position</span>
+              </button>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
+              Pick any US stock (AAPL, NVDA, TSLA, MSFT…). We&apos;ll pull the
+              live option chain, pre-fill the legs for this strategy, and the
+              payoff diagram, Greeks, and P/L heatmap all render below.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Template Strip — shown when chain is loaded */}
       {chain && (
         <TemplateStrip

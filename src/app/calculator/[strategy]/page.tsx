@@ -6,7 +6,8 @@ import {
   getAllStrategySlugs,
 } from "@/lib/strategies/definitions";
 import { strategyTemplates } from "@/lib/strategies/templates";
-import { Badge } from "@/components/ui/badge";
+import { getScenariosForStrategy } from "@/lib/scenarios/registry";
+import { ScenarioPlayer } from "@/components/scenarios/ScenarioPlayer";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
@@ -39,6 +40,12 @@ export async function generateMetadata({
   };
 }
 
+const sentimentPill = {
+  bullish: "text-green-500 border-green-500/40",
+  bearish: "text-red-500 border-red-500/40",
+  neutral: "text-amber-500 border-amber-500/40",
+};
+
 export default async function StrategyPage({ params }: StrategyPageProps) {
   const { strategy } = await params;
   const def = getStrategyBySlug(strategy);
@@ -47,11 +54,8 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
     notFound();
   }
 
-  const sentimentColors = {
-    bullish: "bg-green-500/10 text-green-500",
-    bearish: "bg-red-500/10 text-red-500",
-    neutral: "bg-yellow-500/10 text-yellow-500",
-  };
+  const scenarios = getScenariosForStrategy(def.slug);
+  const hasScenarios = scenarios.length > 0;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -74,45 +78,59 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* Header */}
-        <section className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-              {def.h1}
+      <div className="mx-auto max-w-7xl px-4 md:px-6 py-8">
+        {/* Breadcrumbs */}
+        <div className="font-mono text-[11px] text-muted-foreground mb-3.5">
+          <Link href="/" className="hover:text-foreground">
+            home
+          </Link>
+          {" / "}
+          <Link href="/strategies" className="hover:text-foreground">
+            strategies
+          </Link>
+          {" / "}
+          <span>{def.slug}</span>
+        </div>
+
+        {/* Hero */}
+        <section className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-end mb-6">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05]">
+              {def.name} Calculator
             </h1>
-            <Badge className={sentimentColors[def.sentiment]}>
+            <p className="mt-3 max-w-[62ch] text-base text-muted-foreground">
+              {def.description}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span
+              className={`font-mono text-[10.5px] uppercase tracking-wider px-2 py-1 rounded border ${sentimentPill[def.sentiment]}`}
+            >
               {def.sentiment}
-            </Badge>
-          </div>
-          <p className="max-w-3xl text-lg text-muted-foreground">
-            {def.description}
-          </p>
-        </section>
-
-        {/* Quick Stats */}
-        <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-border p-4">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">
-              Max Profit
-            </div>
-            <div className="mt-1 font-mono text-sm text-green-500">{def.maxProfit}</div>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">
-              Max Loss
-            </div>
-            <div className="mt-1 font-mono text-sm text-red-500">{def.maxLoss}</div>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">
-              Break Even
-            </div>
-            <div className="mt-1 font-mono text-sm">{def.breakEvenFormula}</div>
+            </span>
+            <span className="font-mono text-[10.5px] uppercase tracking-wider px-2 py-1 rounded border border-border text-muted-foreground">
+              Defined risk
+            </span>
+            <span className="font-mono text-[10.5px] uppercase tracking-wider px-2 py-1 rounded border border-border text-muted-foreground">
+              {def.includeStockLeg ? "Stock + option" : "Options only"}
+            </span>
           </div>
         </section>
 
-        {/* Calculator */}
+        {/* At a glance */}
+        <section className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-0 rounded-lg border border-border bg-card">
+          <GlanceCell label="Outlook" value={def.sentiment} />
+          <GlanceCell label="Max profit" value={def.maxProfit} tone="pos" />
+          <GlanceCell label="Max loss" value={def.maxLoss} tone="neg" />
+          <GlanceCell label="Break-even" value={def.breakEvenFormula} />
+        </section>
+
+        {/* 01 · Calculator */}
+        <SectionHead
+          number="01"
+          title="Price it"
+          sub="Enter strikes & premiums · live on the page"
+        />
         <OptionsCalculator
           defaultOptionType={def.defaultOptionType}
           defaultPositionType={def.defaultPositionType}
@@ -120,46 +138,60 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
           defaultTemplate={strategyTemplates[def.slug] ? def.slug : undefined}
         />
 
-        <Separator className="my-12" />
-
-        {/* Educational Content */}
-        <section className="mx-auto max-w-3xl space-y-8">
-          <div>
-            <h2 className="mb-4 text-2xl font-bold">
-              When to Use a {def.name}
-            </h2>
-            <ul className="space-y-2">
-              {def.whenToUse.map((reason) => (
-                <li key={reason} className="flex items-start gap-2 text-muted-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                  {reason}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="mb-4 text-2xl font-bold">Risks</h2>
-            <ul className="space-y-2">
-              {def.risks.map((risk) => (
-                <li key={risk} className="flex items-start gap-2 text-muted-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                  {risk}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Rendered educational content */}
-          <div className="prose prose-invert max-w-none">
-            <div
-              className="space-y-4 text-muted-foreground [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-foreground [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-6 [&_h3]:mb-2 [&_strong]:text-foreground [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1"
-              dangerouslySetInnerHTML={{ __html: markdownToHtml(def.educationalContent) }}
+        {/* 02 · Scenario */}
+        {hasScenarios ? (
+          <>
+            <SectionHead
+              number="02"
+              title="Practical example"
+              sub="Real historical prices · this example is based on real data"
             />
-          </div>
-        </section>
+            <ScenarioPlayer
+              strategySlug={def.slug}
+              scenarioId={scenarios[0]!.id}
+            />
+          </>
+        ) : null}
 
-        {/* Internal Links */}
+        {/* 03 · What it is */}
+        <SectionHead number="03" title="When to use it" />
+        <div className="max-w-3xl">
+          <ul className="space-y-2 mb-8">
+            {def.whenToUse.map((reason) => (
+              <li
+                key={reason}
+                className="flex items-start gap-2 text-muted-foreground"
+              >
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                {reason}
+              </li>
+            ))}
+          </ul>
+          <h3 className="mb-3 text-lg font-semibold">Risks</h3>
+          <ul className="space-y-2">
+            {def.risks.map((risk) => (
+              <li
+                key={risk}
+                className="flex items-start gap-2 text-muted-foreground"
+              >
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                {risk}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* 04 · Educational content */}
+        <SectionHead number="04" title="The deeper breakdown" />
+        <div className="prose prose-invert max-w-none">
+          <div
+            className="max-w-3xl space-y-4 text-muted-foreground [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-foreground [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-6 [&_h3]:mb-2 [&_strong]:text-foreground [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1"
+            dangerouslySetInnerHTML={{
+              __html: markdownToHtml(def.educationalContent),
+            }}
+          />
+        </div>
+
         <Separator className="my-12" />
         <section className="text-center">
           <h2 className="mb-4 text-xl font-bold">Explore More Strategies</h2>
@@ -182,6 +214,53 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
         </section>
       </div>
     </>
+  );
+}
+
+function SectionHead({
+  number,
+  title,
+  sub,
+}: {
+  number: string;
+  title: string;
+  sub?: string;
+}) {
+  return (
+    <div className="mt-12 mb-5 flex items-baseline gap-3.5 border-b border-border pb-3">
+      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+        {number}
+      </span>
+      <h2 className="text-xl md:text-2xl font-bold tracking-tight">{title}</h2>
+      {sub ? (
+        <span className="ml-auto font-mono text-[12px] text-muted-foreground">
+          {sub}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function GlanceCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "pos" | "neg";
+}) {
+  return (
+    <div className="p-4 border-r last:border-r-0 border-b md:border-b-0 border-border [&:nth-child(2n)]:border-r-0 md:[&:nth-child(2n)]:border-r">
+      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={`mt-1.5 font-mono text-sm font-semibold ${tone === "pos" ? "text-green-500" : tone === "neg" ? "text-red-500" : ""}`}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
