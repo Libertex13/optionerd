@@ -85,6 +85,64 @@ create policy "Users can delete own trades"
   using (auth.uid() = user_id);
 
 -- ============================================================
+-- Positions — tracked investment positions with state machine
+-- ============================================================
+create table public.positions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  state text not null default 'watching'
+    check (state in ('structuring', 'watching', 'open', 'closed')),
+  name text not null,
+  ticker text not null,
+  strategy text,
+  entry_underlying_price numeric,
+  entry_date timestamptz,
+  exit_date timestamptz,
+  realised_pnl numeric,
+  cost_basis numeric,
+  legs jsonb not null default '[]'::jsonb,
+  stock_leg jsonb,
+  notes text,
+  tags text[] default '{}',
+  position_order int,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
+);
+create index idx_positions_user_id on public.positions(user_id);
+create index idx_positions_state on public.positions(state);
+create index idx_positions_ticker on public.positions(ticker);
+alter table public.positions enable row level security;
+create policy "Users can view own positions" on public.positions for select using (auth.uid() = user_id);
+create policy "Users can insert own positions" on public.positions for insert with check (auth.uid() = user_id);
+create policy "Users can update own positions" on public.positions for update using (auth.uid() = user_id);
+create policy "Users can delete own positions" on public.positions for delete using (auth.uid() = user_id);
+
+-- ============================================================
+-- Scenarios — user-created stress test scenarios
+-- ============================================================
+create table public.scenarios (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null,
+  description text,
+  target_date date,
+  underlying_shocks jsonb default '{}'::jsonb,
+  default_shock jsonb,
+  iv_shock jsonb,
+  advance_days int default 0,
+  interest_rate numeric default 0.045,
+  notes text,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
+);
+create index idx_scenarios_user_id on public.scenarios(user_id);
+alter table public.scenarios enable row level security;
+create policy "Users can view own scenarios" on public.scenarios for select using (auth.uid() = user_id);
+create policy "Users can insert own scenarios" on public.scenarios for insert with check (auth.uid() = user_id);
+create policy "Users can update own scenarios" on public.scenarios for update using (auth.uid() = user_id);
+create policy "Users can delete own scenarios" on public.scenarios for delete using (auth.uid() = user_id);
+
+-- ============================================================
 -- legs JSONB structure (for reference, not enforced by DB):
 --
 -- [

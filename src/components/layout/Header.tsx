@@ -15,6 +15,7 @@ export function Header() {
             width={140}
             height={22}
             className="block dark:hidden"
+            style={{ height: "auto" }}
             priority
           />
           <Image
@@ -23,6 +24,7 @@ export function Header() {
             width={140}
             height={22}
             className="hidden dark:block"
+            style={{ height: "auto" }}
             priority
           />
         </Link>
@@ -41,6 +43,10 @@ export function Header() {
           <span className="h-4 w-px bg-border" />
           <Link href="/calculator/covered-call" className="hover:text-foreground transition-colors">
             Covered Call
+          </Link>
+          <span className="h-4 w-px bg-border" />
+          <Link href="/portfolio" className="hover:text-foreground transition-colors">
+            Portfolio
           </Link>
           <span className="h-4 w-px bg-border" />
           <Link href="/pricing" className="hover:text-foreground transition-colors">
