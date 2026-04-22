@@ -100,25 +100,30 @@ function downloadCsv(positions: PortfolioPosition[]) {
   URL.revokeObjectURL(url);
 }
 
-function groupKey(p: PortfolioPosition, mode: string): string {
-  switch (mode) {
-    case "ticker":
-      return p.ticker;
-    case "strategy":
-      return p.strat;
-    case "expiry":
-      if (p.dte <= 7) return "≤ 1 week";
-      if (p.dte <= 30) return "≤ 1 month";
-      if (p.dte <= 60) return "≤ 2 months";
-      if (p.dte <= 90) return "≤ 3 months";
-      return "> 3 months";
-    case "pnl":
-      if (p.pnl > 0) return "Winners";
-      if (p.pnl < 0) return "Losers";
-      return "Flat";
-    default:
-      return "";
+interface TickerGroup {
+  ticker: string;
+  items: PortfolioPosition[];
+  net: number;
+  pnl: number;
+  cost: number;
+}
+
+function buildTickerGroups(positions: PortfolioPosition[]): TickerGroup[] {
+  const map = new Map<string, PortfolioPosition[]>();
+  for (const p of positions) {
+    const arr = map.get(p.ticker) ?? [];
+    arr.push(p);
+    map.set(p.ticker, arr);
   }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ticker, items]) => ({
+      ticker,
+      items,
+      net: items.reduce((s, p) => s + p.net, 0),
+      pnl: items.reduce((s, p) => s + p.pnl, 0),
+      cost: items.reduce((s, p) => s + p.cost, 0),
+    }));
 }
 
 interface LivePositionsProps {
@@ -188,14 +193,7 @@ function LegDetailTable({
       {legs.map((l, i) => {
         const m = marks[i];
         const hasMark = live && m !== undefined;
-        const dte =
-          m?.dte ??
-          Math.max(
-            0,
-            Math.round(
-              (new Date(l.exp).getTime() - Date.now()) / 86_400_000,
-            ),
-          );
+        const dte = m?.dte;
         const pnlCls = !hasMark
           ? ""
           : m.pnl > 0
@@ -219,7 +217,9 @@ function LegDetailTable({
             </div>
             <div className={styles.legTableExp}>
               {fmtExpShort(l.exp)}
-              <span className={styles.legTableDte}>{dte}d</span>
+              {dte !== undefined && (
+                <span className={styles.legTableDte}>{dte}d</span>
+              )}
             </div>
             <div className={styles.legTableNum}>${l.p.toFixed(2)}</div>
             <div className={styles.legTableNum}>
@@ -433,12 +433,23 @@ function PositionRow({
 export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightTicker, setHighlightTicker] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState("none");
   const [stateFilter, setStateFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>({ key: "pnl", dir: "desc" });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
+  const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(
+    new Set(),
+  );
+
+  function toggleCollapse(ticker: string) {
+    setCollapsedTickers((s) => {
+      const next = new Set(s);
+      if (next.has(ticker)) next.delete(ticker);
+      else next.add(ticker);
+      return next;
+    });
+  }
   const treemapRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -497,19 +508,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
     );
   }, [positions, stateFilter, search, sort]);
 
-  const groups = useMemo(() => {
-    if (groupBy === "none") return [{ key: "", items: filtered }];
-    const map = new Map<string, PortfolioPosition[]>();
-    for (const p of filtered) {
-      const k = groupKey(p, groupBy);
-      const arr = map.get(k) ?? [];
-      arr.push(p);
-      map.set(k, arr);
-    }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, items]) => ({ key, items }));
-  }, [filtered, groupBy]);
+  const groups = useMemo(() => buildTickerGroups(filtered), [filtered]);
 
   // Aggregate stats — only count positions that are actually carrying P/L
   // (open + closed realised). Watching positions contribute 0.
@@ -672,24 +671,6 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <span className={styles.microLabel}>Group by</span>
-          <div className={styles.seg}>
-            {[
-              { v: "none", l: "None" },
-              { v: "ticker", l: "Ticker" },
-              { v: "expiry", l: "Expiry" },
-              { v: "strategy", l: "Strategy" },
-              { v: "pnl", l: "P&L" },
-            ].map((o) => (
-              <button
-                key={o.v}
-                className={groupBy === o.v ? styles.segActive : ""}
-                onClick={() => setGroupBy(o.v)}
-              >
-                {o.l}
-              </button>
-            ))}
-          </div>
           <span className={styles.microLabel}>State</span>
           <div className={styles.seg}>
             {[
@@ -795,28 +776,78 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
               )}
             </div>
           ) : (
-            groups.map((g) => (
-              <div key={g.key || "all"}>
-                {g.key && (
-                  <div className={styles.groupHeader}>
-                    <span>{g.key}</span>
-                    <span className={styles.groupCount}>{g.items.length}</span>
-                  </div>
-                )}
-                {g.items.map((p) => (
-                  <PositionRow
-                    key={p.id}
-                    position={p}
-                    expanded={expandedId === p.id}
-                    onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
-                    onDelete={() => confirmAndDelete(p.id, p.name)}
-                    tickerHighlight={highlightTicker === p.ticker && expandedId !== p.id}
-                    onMouseEnter={() => setHighlightTicker(p.ticker)}
-                    onMouseLeave={() => setHighlightTicker(null)}
-                  />
-                ))}
-              </div>
-            ))
+            groups.map((g) => {
+              const hasHeader = g.items.length >= 2;
+              const collapsed = hasHeader && collapsedTickers.has(g.ticker);
+              const pnlCls =
+                g.pnl > 0 ? styles.pnlPos : g.pnl < 0 ? styles.pnlNeg : "";
+              return (
+                <div key={g.ticker}>
+                  {hasHeader && (
+                    <div
+                      className={`${styles.tickerGroupHeader} ${collapsed ? styles.tickerGroupHeaderCollapsed : ""}`}
+                      onClick={() => toggleCollapse(g.ticker)}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={!collapsed}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleCollapse(g.ticker);
+                        }
+                      }}
+                    >
+                      <div
+                        className={`${styles.tickerGroupChevron} ${collapsed ? "" : styles.tickerGroupChevronOpen}`}
+                        aria-hidden="true"
+                      >
+                        ▶
+                      </div>
+                      <div className={styles.tickerGroupName}>
+                        {g.ticker}
+                        <span className={styles.tickerGroupSub}>
+                          {g.items.length} positions
+                        </span>
+                      </div>
+                      <div />
+                      <div />
+                      <div className={styles.monoNum}>
+                        {g.net >= 0 ? "+" : "−"}${fmtDollars(g.net)}
+                        <span className={styles.monoNumSub}>
+                          {g.net >= 0 ? "credit" : "debit"}
+                        </span>
+                      </div>
+                      <div className={`${styles.monoNum} ${pnlCls}`}>
+                        {signedDollar(g.pnl, 0)}
+                        <span className={styles.monoNumSub}>
+                          on ${fmtDollars(g.cost)}
+                        </span>
+                      </div>
+                      <div />
+                      <div />
+                      <div />
+                    </div>
+                  )}
+                  {!collapsed &&
+                    g.items.map((p) => (
+                      <PositionRow
+                        key={p.id}
+                        position={p}
+                        expanded={expandedId === p.id}
+                        onToggle={() =>
+                          setExpandedId(expandedId === p.id ? null : p.id)
+                        }
+                        onDelete={() => confirmAndDelete(p.id, p.name)}
+                        tickerHighlight={
+                          highlightTicker === p.ticker && expandedId !== p.id
+                        }
+                        onMouseEnter={() => setHighlightTicker(p.ticker)}
+                        onMouseLeave={() => setHighlightTicker(null)}
+                      />
+                    ))}
+                </div>
+              );
+            })
           )}
         </div>
       </div>

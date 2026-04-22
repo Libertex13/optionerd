@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Position, PortfolioPosition } from "@/lib/portfolio/types";
-import { applyLivePrice, normalizePosition } from "@/lib/portfolio/normalize";
-import { useLivePrices } from "@/hooks/useLivePrices";
+import { applyLiveMarks, normalizePosition } from "@/lib/portfolio/normalize";
+import { useOptionChains } from "@/hooks/useOptionChains";
 
 interface UsePositionsReturn {
   positions: PortfolioPosition[];
@@ -57,15 +57,11 @@ export function usePositions(): UsePositionsReturn {
     () => normalized.map((p) => p.ticker),
     [normalized],
   );
-  const { prices, lastUpdated } = useLivePrices(tickers);
+  const { chains, lastUpdated } = useOptionChains(tickers);
 
   const positions = useMemo(
-    () =>
-      normalized.map((p) => {
-        const livePx = prices[p.ticker];
-        return livePx && livePx > 0 ? applyLivePrice(p, livePx) : p;
-      }),
-    [normalized, prices],
+    () => normalized.map((p) => applyLiveMarks(p, chains[p.ticker])),
+    [normalized, chains],
   );
 
   const liveCoverage = useMemo(() => {

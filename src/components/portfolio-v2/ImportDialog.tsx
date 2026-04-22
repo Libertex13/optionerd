@@ -290,37 +290,22 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
 
           {parsed && rows.length > 0 && (
             <div className={styles.previewTable}>
-              <div className={styles.previewHead}>
-                <div>Ticker</div>
-                <div>Name</div>
-                <div style={{ textAlign: "right" }}>Qty</div>
-                <div>Side</div>
-                <div>Type</div>
-                <div style={{ textAlign: "right" }}>Strike</div>
-                <div style={{ textAlign: "right" }}>Premium</div>
-                <div>Expiry</div>
-                <div style={{ textAlign: "right" }}>Cost</div>
-                <div />
-              </div>
-              {rows.map((r, i) => {
-                const leg = r.legs[0];
-                return (
-                  <div className={styles.previewRow} key={i}>
+              {rows.map((r, i) => (
+                <div className={styles.previewCard} key={i}>
+                  <div className={styles.previewCardHdr}>
                     <div className={styles.mono}>{r.ticker}</div>
-                    <div>{r.name}</div>
-                    <div className={styles.mono} style={{ textAlign: "right" }}>
-                      {leg.quantity}
+                    <div className={styles.previewCardName}>
+                      {r.name}
+                      {r.legs.length > 1 && (
+                        <span className={styles.previewLegCount}>
+                          {r.legs.length} legs · {r.strategy}
+                        </span>
+                      )}
                     </div>
-                    <div className={styles.mono}>{leg.side}</div>
-                    <div className={styles.mono}>{leg.type}</div>
-                    <div className={styles.mono} style={{ textAlign: "right" }}>
-                      {leg.strike}
-                    </div>
-                    <div className={styles.mono} style={{ textAlign: "right" }}>
-                      {leg.entry_premium.toFixed(2)}
-                    </div>
-                    <div className={styles.mono}>{leg.expiration_date}</div>
-                    <div className={styles.mono} style={{ textAlign: "right" }}>
+                    <div
+                      className={styles.mono}
+                      style={{ textAlign: "right", fontWeight: 600 }}
+                    >
                       ${r.cost_basis.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                     </div>
                     <button
@@ -331,8 +316,29 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                       ✕
                     </button>
                   </div>
-                );
-              })}
+                  <div className={styles.previewLegList}>
+                    {r.legs.map((leg, li) => (
+                      <div className={styles.previewLegRow} key={li}>
+                        <span
+                          className={`${styles.previewLegSide} ${leg.side === "long" ? styles.previewLegLong : styles.previewLegShort}`}
+                        >
+                          {leg.side === "long" ? "B" : "S"}
+                        </span>
+                        <span className={styles.mono}>
+                          {leg.quantity}
+                          {leg.type === "call" ? "C" : "P"} {leg.strike}
+                        </span>
+                        <span className={styles.mono} style={{ color: "var(--muted-foreground)" }}>
+                          exp {leg.expiration_date}
+                        </span>
+                        <span className={styles.mono} style={{ color: "var(--muted-foreground)" }}>
+                          @ ${leg.entry_premium.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

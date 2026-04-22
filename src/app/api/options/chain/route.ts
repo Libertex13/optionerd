@@ -111,8 +111,25 @@ function normalizeContract(
 
   const bid = lastQuote.bid ?? 0;
   const ask = lastQuote.ask ?? 0;
-  const mid = lastQuote.midpoint ?? (bid + ask) / 2;
-  const last = day.close ?? mid;
+  const quoteMid = lastQuote.midpoint ?? 0;
+  const bidAskMid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+  const dayClose = day.close ?? 0;
+  const dayVwap = day.vwap ?? 0;
+  const prevClose = day.previous_close ?? 0;
+
+  // Prefer live quote midpoint, then bid/ask computed mid, then today's
+  // close (most recent trade), then vwap, finally previous-day close.
+  // On delayed / Starter plans last_quote is often missing — day.close
+  // (last trade) is typically the right proxy for market value.
+  const last = dayClose > 0 ? dayClose : dayVwap > 0 ? dayVwap : prevClose;
+  const mid =
+    quoteMid > 0
+      ? quoteMid
+      : bidAskMid > 0
+        ? bidAskMid
+        : last > 0
+          ? last
+          : 0;
 
   return {
     contractSymbol: snapshot.details.ticker,

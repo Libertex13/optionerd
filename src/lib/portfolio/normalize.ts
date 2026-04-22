@@ -1,10 +1,12 @@
 import type {
+  LegMark,
   Position,
   PortfolioPosition,
   PortfolioLeg,
   Scenario,
 } from "./types";
 import { markPosition } from "./pricing";
+import type { OptionChain, OptionContract } from "@/types/market";
 
 /**
  * Map a DB position into the compact UI shape used by the dashboard.
@@ -96,8 +98,10 @@ export function normalizePosition(pos: Position): PortfolioPosition {
 }
 
 /**
- * Re-mark a normalized position against a live underlying price. Closed
- * positions keep realised P/L; everything else gets marked-to-market.
+ * Re-mark a normalized position against a live underlying price using
+ * Black-Scholes at the leg's entry IV. Used only as a fallback when chain
+ * data isn't available — BS with a stale IV can diverge materially from
+ * the actual market mid.
  */
 export function applyLivePrice(
   pos: PortfolioPosition,
@@ -121,6 +125,101 @@ export function applyLivePrice(
       theta: mark.theta,
       vega: mark.vega,
     },
+  };
+}
+
+/** Look up a leg's contract inside a chain by expiration + type + strike. */
+function findContract(
+  chain: OptionChain,
+  leg: PortfolioLeg,
+): OptionContract | null {
+  const expiry = chain.expirations.find(
+    (e) => e.expirationDate === leg.exp,
+  );
+  if (!expiry) return null;
+  const pool = leg.t === "call" ? expiry.calls : expiry.puts;
+  return (
+    pool.find((c) => Math.abs(c.strikePrice - leg.k) < 0.001) ?? null
+  );
+}
+
+/**
+ * Mark a position against a live options chain. Uses the current market
+ * mid for each leg's value and the chain's own Greeks — this is the
+ * correct way to mark-to-market, matching what TradeStation / OPC show.
+ *
+ * If any leg can't be matched in the chain (unusual strike, delisted,
+ * partial fetch), falls back to BS-on-underlying via applyLivePrice so
+ * something sensible still renders.
+ */
+export function applyLiveMarks(
+  pos: PortfolioPosition,
+  chain: OptionChain | undefined,
+): PortfolioPosition {
+  if (!chain) return pos;
+  const livePx = chain.underlyingPrice;
+  if (pos.legs.length === 0) {
+    return livePx > 0
+      ? { ...pos, px: livePx, pxLive: true }
+      : pos;
+  }
+
+  const contracts = pos.legs.map((l) => findContract(chain, l));
+  // Treat a contract with no usable price (mid === 0) as unresolved — otherwise
+  // we'd mark the leg as worthless and show a bogus −100% P/L. Polygon returns
+  // mid=0 for untraded strikes and for delayed-feed snapshots without a quote.
+  // In that case show "awaiting feed" (pxLive=false) rather than falling back
+  // to BS with entry IV, which drifts materially from market.
+  const unresolved = contracts.some(
+    (c) => !c || !(c.mid > 0) || !Number.isFinite(c.mid),
+  );
+  if (unresolved) {
+    return livePx > 0 ? { ...pos, px: livePx } : pos;
+  }
+
+  const now = Date.now();
+  const marks: LegMark[] = pos.legs.map((l, i) => {
+    const c = contracts[i]!;
+    const sign = l.s === "long" ? 1 : -1;
+    const mult = sign * l.q * 100;
+    const dte = Math.max(
+      0,
+      Math.round((new Date(l.exp).getTime() - now) / 86_400_000),
+    );
+    return {
+      dte,
+      value: c.mid,
+      pnl: (c.mid - l.p) * mult,
+      delta: c.delta * mult,
+      gamma: c.gamma * mult,
+      // Polygon returns theta already in $/day (per share).
+      theta: c.theta * mult,
+      // Polygon's vega is per 1.00 of IV (100%), so per 1% = /100.
+      vega: (c.vega / 100) * mult,
+    };
+  });
+
+  const isClosed = pos.state === "closed";
+  const pnl = isClosed ? pos.pnl : marks.reduce((s, m) => s + m.pnl, 0);
+  const pnlPct = pos.cost > 0 ? (pnl / pos.cost) * 100 : 0;
+  const greeks = marks.reduce(
+    (a, m) => ({
+      delta: a.delta + m.delta,
+      gamma: a.gamma + m.gamma,
+      theta: a.theta + m.theta,
+      vega: a.vega + m.vega,
+    }),
+    { delta: 0, gamma: 0, theta: 0, vega: 0 },
+  );
+
+  return {
+    ...pos,
+    px: livePx > 0 ? livePx : pos.px,
+    pxLive: livePx > 0,
+    pnl,
+    pnlPct,
+    marks,
+    greeks,
   };
 }
 
