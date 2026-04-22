@@ -848,6 +848,65 @@
   border-top: 1px solid var(--border);
   background: color-mix(in oklch, var(--background) 40%, var(--card));
 }
+.importTabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.importTab {
+  padding: 8px 14px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.importTab:hover { color: var(--foreground); }
+.importTabActive {
+  color: var(--foreground) !important;
+  border-bottom-color: var(--foreground) !important;
+}
+
+.dropZone {
+  border: 1.5px dashed var(--border);
+  border-radius: 6px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: color-mix(in oklch, var(--background) 60%, var(--card));
+}
+.dropZone:hover { border-color: var(--foreground); }
+.dropZoneOver {
+  border-color: var(--foreground);
+  background: color-mix(in oklch, var(--foreground) 5%, var(--card));
+}
+.dropZoneFilled {
+  padding: 10px;
+  min-height: 0;
+  cursor: default;
+}
+.dropHint {
+  text-align: center;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+.dropPreview {
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 4px;
+  display: block;
+  margin: 0 auto;
+}
+
 .importTextarea {
   width: 100%;
   min-height: 140px;

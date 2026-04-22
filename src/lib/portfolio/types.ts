@@ -83,6 +83,26 @@ export interface PortfolioLeg {
   k: number;            // strike
   p: number;            // entry premium
   q: number;            // contracts
+  iv: number;           // entry implied vol (annualized, decimal)
+  exp: string;          // expiration ISO date (YYYY-MM-DD)
+}
+
+export interface PortfolioGreeks {
+  delta: number;        // $ per $1 underlying move
+  gamma: number;        // $ change in delta per $1
+  theta: number;        // $ / calendar day
+  vega: number;         // $ per 1% IV change
+}
+
+/** Per-leg mark output from markLeg(). Kept here to avoid cyclic imports. */
+export interface LegMark {
+  dte: number;
+  value: number;     // BS mid value per share
+  pnl: number;       // $ P/L for this leg (marked-to-market)
+  delta: number;     // $ per $1 underlying move
+  gamma: number;     // $ change in delta per $1
+  theta: number;     // $ / calendar day
+  vega: number;      // $ per 1% IV change
 }
 
 export interface PortfolioPosition {
@@ -91,13 +111,16 @@ export interface PortfolioPosition {
   name: string;
   strat: string;
   ticker: string;
-  px: number;           // current underlying (falls back to entry until live feed)
+  px: number;           // current underlying (live if feed available, else entry)
+  pxLive: boolean;      // true when px comes from a live quote
   legs: PortfolioLeg[];
   net: number;          // credit (+) / debit (−) in dollars
   dte: number;          // days to nearest expiry
   dteMax: number;       // span from entry to latest expiry (for progress bar)
   cost: number;         // capital at risk in dollars
-  pnl: number;          // realised or current
+  pnl: number;          // realised (closed) or marked-to-market (open/watching)
   pnlPct: number;       // % of cost
   entry: string | null; // date label
+  marks: LegMark[];     // per-leg marks, one entry per leg
+  greeks: PortfolioGreeks;
 }

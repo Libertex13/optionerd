@@ -1,10 +1,13 @@
 import type {
+  LegMark,
   PortfolioLeg,
   PortfolioPosition,
   Scenario,
 } from "./types";
 
-function cumulativeNormal(x: number): number {
+export type { LegMark };
+
+export function cumulativeNormal(x: number): number {
   const a1 = 0.254829592;
   const a2 = -0.284496736;
   const a3 = 1.421413741;
@@ -17,6 +20,10 @@ function cumulativeNormal(x: number): number {
   const y =
     1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-xAbs * xAbs);
   return 0.5 * (1 + sign * y);
+}
+
+export function normalPdf(x: number): number {
+  return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI);
 }
 
 export function blackScholes(
@@ -52,6 +59,78 @@ export function mtm(legs: PortfolioLeg[], S: number, T: number, iv = 0.28): numb
     const mult = (l.s === "long" ? 1 : -1) * (l.q || 1);
     return acc + (v - l.p) * mult * 100;
   }, 0);
+}
+
+export function markLeg(
+  l: PortfolioLeg,
+  S: number,
+  now: Date = new Date(),
+  r = 0.045,
+): LegMark {
+  const expMs = new Date(l.exp).getTime();
+  const dte = Math.max(
+    0,
+    Math.round((expMs - now.getTime()) / 86_400_000),
+  );
+  const T = Math.max(dte / 365, 1 / 365);
+  const iv = l.iv && l.iv > 0 ? l.iv : 0.28;
+  const value = blackScholes(S, l.k, T, r, iv, l.t);
+  const sign = l.s === "long" ? 1 : -1;
+  const mult = sign * l.q * 100;
+
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / l.k) + (r + (iv * iv) / 2) * T) / (iv * sqrtT);
+  const d2 = d1 - iv * sqrtT;
+  const pdf = normalPdf(d1);
+  const deltaShare =
+    l.t === "call" ? cumulativeNormal(d1) : cumulativeNormal(d1) - 1;
+  const gammaShare = pdf / (S * iv * sqrtT);
+  const thetaYear =
+    l.t === "call"
+      ? -(S * pdf * iv) / (2 * sqrtT) -
+        r * l.k * Math.exp(-r * T) * cumulativeNormal(d2)
+      : -(S * pdf * iv) / (2 * sqrtT) +
+        r * l.k * Math.exp(-r * T) * cumulativeNormal(-d2);
+  const vegaShare = S * pdf * sqrtT;
+
+  return {
+    dte,
+    value,
+    pnl: (value - l.p) * mult,
+    delta: deltaShare * mult,
+    gamma: gammaShare * mult,
+    theta: (thetaYear / 365) * mult,
+    vega: (vegaShare / 100) * mult,
+  };
+}
+
+export interface PositionMark {
+  marks: LegMark[];
+  pnl: number;
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+}
+
+export function markPosition(
+  legs: PortfolioLeg[],
+  S: number,
+  now: Date = new Date(),
+  r = 0.045,
+): PositionMark {
+  const marks = legs.map((l) => markLeg(l, S, now, r));
+  const acc = marks.reduce(
+    (a, m) => ({
+      pnl: a.pnl + m.pnl,
+      delta: a.delta + m.delta,
+      gamma: a.gamma + m.gamma,
+      theta: a.theta + m.theta,
+      vega: a.vega + m.vega,
+    }),
+    { pnl: 0, delta: 0, gamma: 0, theta: 0, vega: 0 },
+  );
+  return { marks, ...acc };
 }
 
 export interface ScenarioResult {

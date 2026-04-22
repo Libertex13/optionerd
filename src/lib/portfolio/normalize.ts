@@ -21,6 +21,8 @@ export function normalizePosition(pos: Position): PortfolioPosition {
     k: l.strike,
     p: l.entry_premium,
     q: l.quantity,
+    iv: l.implied_volatility,
+    exp: l.expiration_date,
   }));
 
   // Net: short premiums bring credit (+), long premiums cost debit (−), in dollars
