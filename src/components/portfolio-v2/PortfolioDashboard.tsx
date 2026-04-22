@@ -13,11 +13,18 @@ type Tab = "live" | "scenarios";
 
 export function PortfolioDashboard() {
   const [tab, setTab] = useState<Tab>("live");
-  const [tickCount, setTickCount] = useState(2);
+  const [now, setNow] = useState<number>(() => Date.now());
   const [importOpen, setImportOpen] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
-  const { positions, loading: posLoading, error: posError, refresh } = usePositions();
+  const {
+    positions,
+    loading: posLoading,
+    error: posError,
+    refresh,
+    lastTick,
+    liveCoverage,
+  } = usePositions();
   const { scenarios, loading: scnLoading } = useScenarios();
 
   useEffect(() => {
@@ -30,13 +37,18 @@ export function PortfolioDashboard() {
   }, [tab]);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setTickCount((c) => (c + 1) % 31);
-    }, 1000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
   const loading = authLoading || posLoading || scnLoading;
+  const tickAgoSec = lastTick ? Math.max(0, Math.round((now - lastTick) / 1000)) : null;
+  const liveLabel =
+    positions.length === 0
+      ? "Live · no positions"
+      : tickAgoSec == null
+        ? "Live · connecting…"
+        : `Live · ${liveCoverage.live}/${liveCoverage.total} · last tick ${tickAgoSec}s ago`;
 
   return (
     <>
@@ -58,7 +70,7 @@ export function PortfolioDashboard() {
         <div className={styles.tabsRight}>
           <span className={styles.refresh}>
             <span className={styles.pulseDot} />
-            Live · last tick {tickCount}s ago
+            {liveLabel}
           </span>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
@@ -116,7 +128,9 @@ export function PortfolioDashboard() {
           </div>
         ) : (
           <>
-            {tab === "live" && <LivePositions positions={positions} />}
+            {tab === "live" && (
+              <LivePositions positions={positions} onRefresh={refresh} />
+            )}
             {tab === "scenarios" && (
               <Scenarios positions={positions} scenarios={scenarios} />
             )}

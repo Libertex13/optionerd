@@ -29,6 +29,32 @@ export async function GET() {
 }
 
 /**
+ * DELETE /api/positions — delete every position for the authenticated user.
+ * Used by the "Clear all" action in the portfolio dashboard.
+ */
+export async function DELETE() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { error, count } = await supabase
+    .from("positions")
+    .delete({ count: "exact" })
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ deleted: count ?? 0 });
+}
+
+/**
  * POST /api/positions — create a new position.
  */
 export async function POST(request: Request) {

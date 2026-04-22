@@ -377,8 +377,21 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             className={`${styles.btn} ${styles.btnPrimary}`}
             onClick={handleImport}
             disabled={submitting || rows.length === 0}
+            title={
+              rows.length === 0
+                ? mode === "paste"
+                  ? "Paste rows and click Parse first"
+                  : "Upload a screenshot and click Extract positions first"
+                : undefined
+            }
           >
-            {submitting ? "Importing…" : `Import ${rows.length || ""} position${rows.length === 1 ? "" : "s"}`}
+            {submitting
+              ? "Importing…"
+              : rows.length === 0
+                ? mode === "paste"
+                  ? "Parse rows first"
+                  : "Extract first"
+                : `Import ${rows.length} position${rows.length === 1 ? "" : "s"}`}
           </button>
         </div>
       </div>

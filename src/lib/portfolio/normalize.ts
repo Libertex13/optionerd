@@ -4,13 +4,13 @@ import type {
   PortfolioLeg,
   Scenario,
 } from "./types";
+import { markPosition } from "./pricing";
 
 /**
  * Map a DB position into the compact UI shape used by the dashboard.
  *
- * Current underlying price: falls back to entry_underlying_price until a live
- * feed is wired up. P/L stays at 0 for watching/structuring positions until
- * we have current mids to mark against entry premiums.
+ * Initially marked against entry_underlying_price. Callers that have a live
+ * quote should call applyLivePrice() to re-mark with the current underlying.
  */
 export function normalizePosition(pos: Position): PortfolioPosition {
   const now = new Date();
@@ -51,10 +51,6 @@ export function normalizePosition(pos: Position): PortfolioPosition {
   // Cost: user-specified cost_basis or |net| as fallback
   const cost = pos.cost_basis ?? Math.abs(net);
 
-  // P/L: realised on closed positions; 0 otherwise until we have live marks
-  const pnl = pos.state === "closed" ? pos.realised_pnl ?? 0 : 0;
-  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-
   // Strategy: stored value, else inferred label, else "custom"
   const strat = pos.strategy ?? inferStrategy(pos) ?? "custom";
 
@@ -63,8 +59,15 @@ export function normalizePosition(pos: Position): PortfolioPosition {
     ? pos.entry_date.slice(0, 10)
     : null;
 
-  // Current underlying price: fall back to entry price until live feed exists
+  // Initial px from entry (no live feed yet)
   const px = pos.entry_underlying_price ?? 0;
+  const mark = markPosition(legs, px > 0 ? px : 1, now);
+
+  // P/L: realised for closed positions; initial mark is 0 (S = entry), live
+  // feed will re-mark via applyLivePrice().
+  const pnl =
+    pos.state === "closed" ? pos.realised_pnl ?? 0 : mark.pnl;
+  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
 
   return {
     id: pos.id,
@@ -73,6 +76,7 @@ export function normalizePosition(pos: Position): PortfolioPosition {
     strat,
     ticker: pos.ticker,
     px,
+    pxLive: false,
     legs,
     net,
     dte,
@@ -81,6 +85,42 @@ export function normalizePosition(pos: Position): PortfolioPosition {
     pnl,
     pnlPct,
     entry,
+    marks: mark.marks,
+    greeks: {
+      delta: mark.delta,
+      gamma: mark.gamma,
+      theta: mark.theta,
+      vega: mark.vega,
+    },
+  };
+}
+
+/**
+ * Re-mark a normalized position against a live underlying price. Closed
+ * positions keep realised P/L; everything else gets marked-to-market.
+ */
+export function applyLivePrice(
+  pos: PortfolioPosition,
+  livePx: number,
+): PortfolioPosition {
+  if (!(livePx > 0)) return pos;
+  const mark = markPosition(pos.legs, livePx);
+  const isClosed = pos.state === "closed";
+  const pnl = isClosed ? pos.pnl : mark.pnl;
+  const pnlPct = pos.cost > 0 ? (pnl / pos.cost) * 100 : 0;
+  return {
+    ...pos,
+    px: livePx,
+    pxLive: true,
+    pnl,
+    pnlPct,
+    marks: mark.marks,
+    greeks: {
+      delta: mark.delta,
+      gamma: mark.gamma,
+      theta: mark.theta,
+      vega: mark.vega,
+    },
   };
 }
 

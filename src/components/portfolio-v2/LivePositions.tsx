@@ -10,6 +10,7 @@ import {
   popLabel,
 } from "@/lib/portfolio/pricing";
 import type {
+  LegMark,
   PortfolioLeg,
   PortfolioPosition,
   PositionState,
@@ -20,6 +21,40 @@ import { ExpiryCalendar } from "./ExpiryCalendar";
 
 const fmtDollars = (n: number) =>
   Math.round(Math.abs(n)).toLocaleString("en-US");
+
+function fmtExpShort(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function signedDollar(n: number, digits = 0): string {
+  return (
+    (n >= 0 ? "+$" : "−$") +
+    Math.abs(n).toLocaleString("en-US", {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits,
+    })
+  );
+}
+
+type SortKey = "net" | "pnl" | "dte";
+type SortDir = "asc" | "desc";
+interface SortState {
+  key: SortKey;
+  dir: SortDir;
+}
+
+const sortValue = (p: PortfolioPosition, key: SortKey): number => {
+  if (key === "net") return p.net;
+  if (key === "pnl") return p.pnl;
+  return p.dte;
+};
+
+function sortArrow(current: SortState, key: SortKey): string {
+  if (current.key !== key) return "↕";
+  return current.dir === "asc" ? "↑" : "↓";
+}
 
 function downloadCsv(positions: PortfolioPosition[]) {
   const head = [
@@ -88,6 +123,7 @@ function groupKey(p: PortfolioPosition, mode: string): string {
 
 interface LivePositionsProps {
   positions: PortfolioPosition[];
+  onRefresh: () => Promise<void> | void;
 }
 
 function stateBadgeClass(st: PositionState): string {
@@ -131,10 +167,79 @@ function DteBar({ dte, max }: { dte: number; max: number }) {
   );
 }
 
+function LegDetailTable({
+  legs,
+  marks,
+  live,
+}: {
+  legs: PortfolioLeg[];
+  marks: LegMark[];
+  live: boolean;
+}) {
+  return (
+    <div className={styles.legTable}>
+      <div className={styles.legTableHead}>
+        <div>Leg</div>
+        <div>Expiry</div>
+        <div className={styles.legTableNum}>Entry</div>
+        <div className={styles.legTableNum}>Mark</div>
+        <div className={styles.legTableNum}>P/L</div>
+      </div>
+      {legs.map((l, i) => {
+        const m = marks[i];
+        const hasMark = live && m !== undefined;
+        const dte =
+          m?.dte ??
+          Math.max(
+            0,
+            Math.round(
+              (new Date(l.exp).getTime() - Date.now()) / 86_400_000,
+            ),
+          );
+        const pnlCls = !hasMark
+          ? ""
+          : m.pnl > 0
+            ? styles.pnlPos
+            : m.pnl < 0
+              ? styles.pnlNeg
+              : "";
+        return (
+          <div key={i} className={styles.legTableRow}>
+            <div className={styles.legTableLeg}>
+              <span
+                className={`${styles.legChipS} ${
+                  l.s === "long" ? styles.legChipSLong : styles.legChipSShort
+                }`}
+              >
+                {l.s === "long" ? "B" : "S"}
+              </span>
+              <span>
+                {l.q} {l.t[0].toUpperCase()} {l.k}
+              </span>
+            </div>
+            <div className={styles.legTableExp}>
+              {fmtExpShort(l.exp)}
+              <span className={styles.legTableDte}>{dte}d</span>
+            </div>
+            <div className={styles.legTableNum}>${l.p.toFixed(2)}</div>
+            <div className={styles.legTableNum}>
+              {hasMark ? `$${m.value.toFixed(2)}` : "—"}
+            </div>
+            <div className={`${styles.legTableNum} ${pnlCls}`}>
+              {hasMark ? signedDollar(m.pnl, 0) : "—"}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PositionRow({
   position,
   expanded,
   onToggle,
+  onDelete,
   tickerHighlight,
   onMouseEnter,
   onMouseLeave,
@@ -142,18 +247,48 @@ function PositionRow({
   position: PortfolioPosition;
   expanded: boolean;
   onToggle: () => void;
+  onDelete: () => void;
   tickerHighlight: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
   const p = position;
   const netPrefix = p.net >= 0 ? "+" : "−";
-  const pnlCls = p.pnl > 0 ? styles.pnlPos : p.pnl < 0 ? styles.pnlNeg : "";
-
-  // Simple delta estimate per leg
-  const delta = p.legs
-    .reduce((s, l) => s + (l.s === "long" ? 1 : -1) * (l.t === "call" ? 0.4 : -0.4) * l.q, 0)
-    .toFixed(2);
+  const canShowLivePnl = p.pxLive && p.state !== "watching";
+  const displayPnl = p.state === "closed" ? p.pnl : canShowLivePnl ? p.pnl : 0;
+  const pnlCls =
+    canShowLivePnl || p.state === "closed"
+      ? displayPnl > 0
+        ? styles.pnlPos
+        : displayPnl < 0
+          ? styles.pnlNeg
+          : ""
+      : "";
+  const pnlDisplay =
+    p.state === "watching"
+      ? "—"
+      : p.state === "closed" || canShowLivePnl
+        ? signedDollar(displayPnl, 0)
+        : "…";
+  const pnlSub =
+    p.state === "watching"
+      ? ""
+      : p.state === "closed" || canShowLivePnl
+        ? fmtPct(p.pnlPct)
+        : "awaiting feed";
+  const greeks = p.greeks;
+  const thetaCls =
+    p.pxLive && greeks.theta > 0
+      ? styles.pnlPos
+      : p.pxLive && greeks.theta < 0
+        ? styles.pnlNeg
+        : "";
+  const vegaCls =
+    p.pxLive && greeks.vega > 0
+      ? styles.pnlPos
+      : p.pxLive && greeks.vega < 0
+        ? styles.pnlNeg
+        : "";
 
   return (
     <div className={styles.posRowWrap}>
@@ -168,7 +303,10 @@ function PositionRow({
         </div>
         <div className={styles.posTicker}>
           {p.ticker}
-          <span className={styles.tkPx}>${p.px.toFixed(2)}</span>
+          <span className={styles.tkPx}>
+            {p.px > 0 ? `$${p.px.toFixed(2)}` : "—"}
+            {p.pxLive && <span className={styles.liveDot} aria-label="live" />}
+          </span>
         </div>
         <div className={styles.posName}>
           {p.name}
@@ -182,12 +320,8 @@ function PositionRow({
           <span className={styles.monoNumSub}>{p.net >= 0 ? "credit" : "debit"}</span>
         </div>
         <div className={`${styles.monoNum} ${pnlCls}`}>
-          {p.state === "watching"
-            ? "—"
-            : (p.pnl >= 0 ? "+" : "−") + "$" + fmtDollars(p.pnl)}
-          <span className={styles.monoNumSub}>
-            {p.state === "watching" ? "" : fmtPct(p.pnlPct)}
-          </span>
+          {pnlDisplay}
+          <span className={styles.monoNumSub}>{pnlSub}</span>
         </div>
         <div className={styles.monoNum}>
           {p.dte}d<DteBar dte={p.dte} max={p.dteMax} />
@@ -216,13 +350,55 @@ function PositionRow({
                 <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}>
                   Copy share link
                 </button>
+                <button
+                  className={`${styles.btn} ${styles.btnSm} ${styles.btnDanger}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             </div>
             <div>
               <div className={styles.microLabel} style={{ marginBottom: 6 }}>
-                Leg detail
+                Legs {p.pxLive ? "· marked to live" : "· awaiting live feed"}
               </div>
-              <div className={styles.statRow} style={{ marginBottom: 10 }}>
+              <LegDetailTable legs={p.legs} marks={p.marks} live={p.pxLive} />
+              <div className={styles.microLabel} style={{ margin: "14px 0 5px" }}>
+                Greeks {p.pxLive ? "" : "· awaiting feed"}
+              </div>
+              <div className={styles.statRow}>
+                <div>
+                  <div className={styles.statRowK}>Δ ($/$)</div>
+                  <div className={styles.statRowV}>
+                    {p.pxLive ? signedDollar(greeks.delta, 1) : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className={styles.statRowK}>Γ</div>
+                  <div className={styles.statRowV}>
+                    {p.pxLive ? greeks.gamma.toFixed(3) : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className={styles.statRowK}>Θ ($/day)</div>
+                  <div className={`${styles.statRowV} ${thetaCls}`}>
+                    {p.pxLive ? signedDollar(greeks.theta, 1) : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className={styles.statRowK}>ν ($/1%)</div>
+                  <div className={`${styles.statRowV} ${vegaCls}`}>
+                    {p.pxLive ? signedDollar(greeks.vega, 1) : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className={styles.microLabel} style={{ margin: "14px 0 5px" }}>
+                Structure
+              </div>
+              <div className={styles.statRow}>
                 <div>
                   <div className={styles.statRowK}>Max profit</div>
                   <div className={styles.statRowV} style={{ color: "#22c55e" }}>
@@ -246,31 +422,6 @@ function PositionRow({
                   <div className={styles.statRowV}>{popLabel(p)}</div>
                 </div>
               </div>
-              <div className={styles.microLabel} style={{ marginBottom: 5 }}>
-                Greeks
-              </div>
-              <div className={styles.statRow}>
-                <div>
-                  <div className={styles.statRowK}>Δ</div>
-                  <div className={styles.statRowV}>{delta}</div>
-                </div>
-                <div>
-                  <div className={styles.statRowK}>Γ</div>
-                  <div className={styles.statRowV}>0.008</div>
-                </div>
-                <div>
-                  <div className={styles.statRowK}>Θ</div>
-                  <div className={styles.statRowV} style={{ color: "#22c55e" }}>
-                    +{(2 + ((p.id.charCodeAt(1) * 3) % 60) / 10).toFixed(1)}
-                  </div>
-                </div>
-                <div>
-                  <div className={styles.statRowK}>ν</div>
-                  <div className={styles.statRowV} style={{ color: "#ef4444" }}>
-                    −{(10 + ((p.id.charCodeAt(1) * 7) % 200) / 10).toFixed(1)}
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -279,18 +430,60 @@ function PositionRow({
   );
 }
 
-export function LivePositions({ positions }: LivePositionsProps) {
+export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightTicker, setHighlightTicker] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState("none");
   const [stateFilter, setStateFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortState>({ key: "pnl", dir: "desc" });
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const treemapRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
+  function toggleSort(key: SortKey) {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "desc" },
+    );
+  }
+
+  async function deletePosition(id: string) {
+    if (pendingDeleteId) return;
+    setPendingDeleteId(id);
+    try {
+      const res = await fetch(`/api/positions/${id}`, { method: "DELETE" });
+      if (res.ok) await onRefresh();
+    } finally {
+      setPendingDeleteId(null);
+    }
+  }
+
+  async function clearAll() {
+    if (clearingAll || positions.length === 0) return;
+    const confirmed = window.confirm(
+      `Delete all ${positions.length} position${positions.length === 1 ? "" : "s"}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setClearingAll(true);
+    try {
+      const res = await fetch("/api/positions", { method: "DELETE" });
+      if (res.ok) await onRefresh();
+    } finally {
+      setClearingAll(false);
+    }
+  }
+
+  function confirmAndDelete(id: string, name: string) {
+    const confirmed = window.confirm(`Delete "${name}"? This cannot be undone.`);
+    if (confirmed) void deletePosition(id);
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return positions.filter((p) => {
+    const matched = positions.filter((p) => {
       if (stateFilter !== "all" && p.state !== stateFilter) return false;
       if (q) {
         const hay = `${p.ticker} ${p.name} ${p.strat}`.toLowerCase();
@@ -298,7 +491,11 @@ export function LivePositions({ positions }: LivePositionsProps) {
       }
       return true;
     });
-  }, [positions, stateFilter, search]);
+    const mult = sort.dir === "asc" ? 1 : -1;
+    return [...matched].sort(
+      (a, b) => (sortValue(a, sort.key) - sortValue(b, sort.key)) * mult,
+    );
+  }, [positions, stateFilter, search, sort]);
 
   const groups = useMemo(() => {
     if (groupBy === "none") return [{ key: "", items: filtered }];
@@ -314,12 +511,38 @@ export function LivePositions({ positions }: LivePositionsProps) {
       .map(([key, items]) => ({ key, items }));
   }, [filtered, groupBy]);
 
-  // Aggregate stats
-  const openPnl = positions.reduce((s, p) => s + p.pnl, 0);
-  const deployed = positions.reduce((s, p) => s + p.cost, 0);
+  // Aggregate stats — only count positions that are actually carrying P/L
+  // (open + closed realised). Watching positions contribute 0.
+  const marked = useMemo(
+    () => positions.filter((p) => p.state !== "watching"),
+    [positions],
+  );
+  const livePositions = useMemo(
+    () => positions.filter((p) => p.pxLive && p.state !== "closed"),
+    [positions],
+  );
+  const openPnl = marked.reduce((s, p) => s + p.pnl, 0);
+  const deployed = marked.reduce((s, p) => s + p.cost, 0);
   const openPnlPct = deployed > 0 ? (openPnl / deployed) * 100 : 0;
   const openCount = positions.filter((p) => p.state === "open").length;
   const watchingCount = positions.filter((p) => p.state === "watching").length;
+
+  // Aggregate Greeks across live, non-closed positions. These are dollar
+  // Greeks summed across the book.
+  const agg = useMemo(
+    () =>
+      livePositions.reduce(
+        (a, p) => ({
+          delta: a.delta + p.greeks.delta,
+          gamma: a.gamma + p.greeks.gamma,
+          theta: a.theta + p.greeks.theta,
+          vega: a.vega + p.greeks.vega,
+        }),
+        { delta: 0, gamma: 0, theta: 0, vega: 0 },
+      ),
+    [livePositions],
+  );
+  const hasLive = livePositions.length > 0;
 
   // Next expiry: smallest dte among positions
   const sortedByDte = [...positions].filter((p) => p.dte >= 0).sort((a, b) => a.dte - b.dte);
@@ -332,6 +555,12 @@ export function LivePositions({ positions }: LivePositionsProps) {
   const pnlColorCls =
     openPnl > 0 ? styles.pnlPos : openPnl < 0 ? styles.pnlNeg : "";
 
+  const liveCount = positions.filter((p) => p.pxLive).length;
+  const pnlSubtitle =
+    positions.length === 0
+      ? "no positions yet"
+      : `on $${deployed.toLocaleString("en-US", { maximumFractionDigits: 0 })} deployed · ${(openPnlPct >= 0 ? "+" : "") + openPnlPct.toFixed(2)}%`;
+
   return (
     <section>
       {/* Summary strip */}
@@ -342,20 +571,20 @@ export function LivePositions({ positions }: LivePositionsProps) {
             <div className={`${styles.sumV} ${pnlColorCls}`}>
               {positions.length === 0
                 ? "—"
-                : (openPnl >= 0 ? "+" : "−") +
-                  "$" +
-                  Math.abs(openPnl).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                : signedDollar(openPnl, 0)}
             </div>
-            <div className={styles.sumDelta}>
-              {positions.length === 0
-                ? "no positions yet"
-                : `on $${deployed.toLocaleString("en-US", { maximumFractionDigits: 0 })} deployed · ${(openPnlPct >= 0 ? "+" : "") + openPnlPct.toFixed(2)}%`}
-            </div>
+            <div className={styles.sumDelta}>{pnlSubtitle}</div>
           </div>
           <div>
-            <div className={styles.sumK}>Today</div>
-            <div className={`${styles.sumV}`}>—</div>
-            <div className={styles.sumDelta}>needs live feed</div>
+            <div className={styles.sumK}>Θ Today</div>
+            <div
+              className={`${styles.sumV} ${hasLive && agg.theta > 0 ? styles.pnlPos : hasLive && agg.theta < 0 ? styles.pnlNeg : ""}`}
+            >
+              {hasLive ? signedDollar(agg.theta, 0) : "—"}
+            </div>
+            <div className={styles.sumDelta}>
+              {hasLive ? "per calendar day" : "awaiting live feed"}
+            </div>
           </div>
           <div>
             <div className={styles.sumK}>Positions</div>
@@ -371,26 +600,65 @@ export function LivePositions({ positions }: LivePositionsProps) {
           </div>
         </div>
 
-        {/* Greeks bar — will show real aggregates when live feed wires up */}
+        {/* Greeks bar — aggregated dollar Greeks across live, non-closed positions */}
         <div className={styles.greeksBar}>
           <div className={styles.greeksHdr}>
-            <span className={styles.microLabel}>
-              Net exposure · per $1 underlying move
-            </span>
+            <span className={styles.microLabel}>Net exposure</span>
             <span className={styles.cardSub}>
-              {positions.length === 0 ? "—" : "pending live feed"}
+              {positions.length === 0
+                ? "—"
+                : hasLive
+                  ? `${livePositions.length}/${positions.length} live`
+                  : liveCount === 0
+                    ? "awaiting live feed"
+                    : "no open positions"}
             </span>
           </div>
           <div className={styles.gkRow}>
-            {(["Δ", "Γ", "Θ", "Vega"] as const).map((label) => (
-              <div key={label} className={styles.gkItem}>
-                <span className={styles.gkK}>{label}</span>
-                <div className={styles.gkTrack}>
-                  <span className={styles.gkCenter} />
+            {(
+              [
+                { label: "Δ ($/$)", val: agg.delta, digits: 1 },
+                { label: "Γ", val: agg.gamma, digits: 3 },
+                { label: "Θ ($/day)", val: agg.theta, digits: 1 },
+                { label: "ν ($/1%)", val: agg.vega, digits: 1 },
+              ] as const
+            ).map((g) => {
+              const maxAbs = Math.max(
+                1,
+                Math.abs(agg.delta),
+                Math.abs(agg.gamma) * 200,
+                Math.abs(agg.theta),
+                Math.abs(agg.vega),
+              );
+              // Scale bar width by category magnitude, capped at 50%
+              const ratio = hasLive
+                ? Math.min(0.5, Math.abs(g.val) / maxAbs / 2)
+                : 0;
+              const positive = g.val >= 0;
+              return (
+                <div key={g.label} className={styles.gkItem}>
+                  <span className={styles.gkK}>{g.label}</span>
+                  <div className={styles.gkTrack}>
+                    <span className={styles.gkCenter} />
+                    {hasLive && (
+                      <span
+                        className={`${styles.gkFill} ${positive ? styles.gkFillPos : styles.gkFillNeg}`}
+                        style={{ width: `${ratio * 100}%` }}
+                      />
+                    )}
+                  </div>
+                  <span
+                    className={`${styles.gkV} ${hasLive && g.val > 0 ? styles.pnlPos : hasLive && g.val < 0 ? styles.pnlNeg : ""}`}
+                  >
+                    {hasLive
+                      ? g.label.startsWith("Γ")
+                        ? g.val.toFixed(g.digits)
+                        : signedDollar(g.val, g.digits)
+                      : "—"}
+                  </span>
                 </div>
-                <span className={styles.gkV}>—</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -466,6 +734,13 @@ export function LivePositions({ positions }: LivePositionsProps) {
           >
             Export CSV
           </button>
+          <button
+            className={`${styles.btn} ${styles.btnSm} ${styles.btnDanger}`}
+            onClick={clearAll}
+            disabled={positions.length === 0 || clearingAll}
+          >
+            {clearingAll ? "Clearing…" : "Clear all"}
+          </button>
         </div>
       </div>
 
@@ -476,10 +751,25 @@ export function LivePositions({ positions }: LivePositionsProps) {
           <div>Ticker</div>
           <div>Position</div>
           <div>Legs</div>
-          <div className="r">Net cost ↑↓</div>
-          <div className="r">Current P/L ↓</div>
-          <div className="r">DTE</div>
-          <div className="r">State</div>
+          <div
+            className={`${styles.r} ${styles.sortable} ${sort.key === "net" ? styles.sortActive : ""}`}
+            onClick={() => toggleSort("net")}
+          >
+            Net cost <span className={styles.sortArrow}>{sortArrow(sort, "net")}</span>
+          </div>
+          <div
+            className={`${styles.r} ${styles.sortable} ${sort.key === "pnl" ? styles.sortActive : ""}`}
+            onClick={() => toggleSort("pnl")}
+          >
+            Current P/L <span className={styles.sortArrow}>{sortArrow(sort, "pnl")}</span>
+          </div>
+          <div
+            className={`${styles.r} ${styles.sortable} ${sort.key === "dte" ? styles.sortActive : ""}`}
+            onClick={() => toggleSort("dte")}
+          >
+            DTE <span className={styles.sortArrow}>{sortArrow(sort, "dte")}</span>
+          </div>
+          <div className={styles.r}>State</div>
           <div />
         </div>
         <div>
@@ -519,6 +809,7 @@ export function LivePositions({ positions }: LivePositionsProps) {
                     position={p}
                     expanded={expandedId === p.id}
                     onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                    onDelete={() => confirmAndDelete(p.id, p.name)}
                     tickerHighlight={highlightTicker === p.ticker && expandedId !== p.id}
                     onMouseEnter={() => setHighlightTicker(p.ticker)}
                     onMouseLeave={() => setHighlightTicker(null)}
