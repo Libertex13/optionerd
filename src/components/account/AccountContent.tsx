@@ -8,6 +8,7 @@ import { getPortalLink } from "@/lib/stripe/config";
 import { Badge } from "@/components/ui/badge";
 import type { Plan, PlanPeriod } from "@/lib/supabase/types";
 import { DeleteAccountModal } from "./DeleteAccountModal";
+import { TradeStationConnection } from "./TradeStationConnection";
 
 interface ProfileData {
   plan: Plan;
@@ -158,6 +159,8 @@ export function AccountContent() {
           )}
         </div>
       </section>
+
+      <TradeStationConnection />
 
       {/* Billing history */}
       {isNerd && (
