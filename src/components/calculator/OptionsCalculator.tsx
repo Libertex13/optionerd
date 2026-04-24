@@ -14,6 +14,7 @@ import { TickerSearch } from "./TickerSearch";
 import { PayoffDiagram } from "./PayoffDiagram";
 import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
+import { MixedExpiryScenarioPanel } from "./MixedExpiryScenarioPanel";
 import { SaveTradeButton } from "./SaveTradeButton";
 import { ShareTradeButton } from "./ShareTradeButton";
 import { StrategyPicker } from "./StrategyPicker";
@@ -22,11 +23,14 @@ import { TimeSlider } from "./TimeSlider";
 import { MaxPainDisplay } from "./MaxPainDisplay";
 import { NerdGate } from "@/components/billing/NerdGate";
 import type { OptionChain, OptionContract } from "@/types/market";
-import type { OptionType, PositionType, OptionLeg } from "@/types/options";
+import type { OptionType, PositionType, OptionLeg, StockLeg } from "@/types/options";
 import { priceOption } from "@/lib/pricing/black-scholes";
 import { calculateGreeks } from "@/lib/pricing/greeks";
 import {
+  classifyUpperTailRisk,
+  calculateStrategyProfitLossAtDate,
   generatePayoffAtExpiry,
+  generatePayoffAtDate,
   findBreakEvenPoints,
   calculateMaxProfitLoss,
 } from "@/lib/pricing/payoff";
@@ -86,6 +90,14 @@ const mockMaxPainExpirations: OptionChainExpiry[] = [
     puts: [mockContract(170, "put", 7000), mockContract(175, "put", 9000), mockContract(180, "put", 5000)],
   },
 ];
+
+function fallbackDaysToExpiry(expirationDate: string): number {
+  const diffMs = new Date(`${expirationDate}T23:59:59.999Z`).getTime() - Date.now();
+  if (!Number.isFinite(diffMs)) {
+    return 0;
+  }
+  return Math.max(0, Math.round(diffMs / 86_400_000));
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -175,7 +187,6 @@ export function OptionsCalculator({
   const [stockPriceInput, setStockPriceInput] = useState<string>("");
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
-
   const activeLeg = legs[activeLegIndex] ?? null;
 
   const switchToLeg = useCallback((index: number) => {
@@ -213,7 +224,7 @@ export function OptionsCalculator({
       if (contract.last > 0) return contract.last;
       const dte =
         chainData.expirations.find((e) => e.expirationDate === expiry)
-          ?.daysToExpiry ?? 30;
+          ?.daysToExpiry ?? fallbackDaysToExpiry(expiry);
       const pricing = priceOption({
         spotPrice: chainData.underlyingPrice,
         strikePrice: contract.strikePrice,
@@ -612,14 +623,34 @@ export function OptionsCalculator({
   }, [chain, activeExpiry, activeOptionType]);
 
   // Compute payoff from ALL legs
-  const { payoffData, breakEvenPoints, maxProfit, maxLoss, isUnlimitedProfit, isUnlimitedLoss, profitAtTarget, legSummaries, pricingResult, strategyLegs, maxDte, chanceOfProfit } =
+  const {
+    payoffData,
+    breakEvenPoints,
+    maxProfit,
+    maxLoss,
+    isUnlimitedProfit,
+    isUnlimitedLoss,
+    profitAtTarget,
+    legSummaries,
+    pricingResult,
+    strategyLegs,
+    maxDte,
+    chanceOfProfit,
+    isMixedExpiry,
+    selectedExpiryLabel,
+    selectedExpiryApproximate,
+    expiryInfo,
+    scenarioOptionLegs,
+    scenarioStockLeg,
+    hasUnlimitedUpsideLoss,
+  } =
     useMemo(() => {
       if (!chain || legs.length === 0) {
         return {
           payoffData: null,
           breakEvenPoints: [],
-          maxProfit: 0,
-          maxLoss: 0,
+          maxProfit: null as number | null,
+          maxLoss: null as number | null,
           profitAtTarget: null,
           legSummaries: [],
           pricingResult: null,
@@ -628,6 +659,13 @@ export function OptionsCalculator({
           chanceOfProfit: null as number | null,
           isUnlimitedProfit: false,
           isUnlimitedLoss: false,
+          isMixedExpiry: false,
+          selectedExpiryLabel: null as string | null,
+          selectedExpiryApproximate: false,
+          expiryInfo: [] as { expirationDate: string; daysToExpiry: number }[],
+          scenarioOptionLegs: [] as OptionLeg[],
+          scenarioStockLeg: null as StockLeg | null,
+          hasUnlimitedUpsideLoss: false,
         };
       }
 
@@ -652,9 +690,39 @@ export function OptionsCalculator({
         : [];
 
       const allLegs = [...optionLegs, ...stockLegs];
-      const payoff = generatePayoffAtExpiry(allLegs, chain.underlyingPrice);
+      const expiryDetails = optionLegs
+        .map((leg) => {
+          const detail = chain.expirations.find(
+            (e) => e.expirationDate === leg.expirationDate,
+          );
+          return {
+            expirationDate: leg.expirationDate,
+            daysToExpiry: detail?.daysToExpiry ?? fallbackDaysToExpiry(leg.expirationDate),
+          };
+        })
+        .sort((a, b) => a.daysToExpiry - b.daysToExpiry);
+      const uniqueExpiries = Array.from(new Set(expiryDetails.map((item) => item.expirationDate)));
+      const mixedExpiry = uniqueExpiries.length > 1;
+      const nearestExpiry = expiryDetails[0] ?? null;
+      const latestExpiry = expiryDetails[expiryDetails.length - 1] ?? null;
+      const selectedExpiry = mixedExpiry ? nearestExpiry : null;
+      const selectedDaysForward = selectedExpiry?.daysToExpiry ?? 0;
+      const payoff = mixedExpiry && selectedExpiry
+        ? generatePayoffAtDate(
+            allLegs,
+            chain.underlyingPrice,
+            selectedDaysForward,
+            DEFAULT_RISK_FREE_RATE,
+          )
+        : generatePayoffAtExpiry(allLegs, chain.underlyingPrice);
       const breakEvens = findBreakEvenPoints(payoff);
-      const { maxProfit: mp, maxLoss: ml, isUnlimitedProfit: unlimitedProfit, isUnlimitedLoss: unlimitedLoss } = calculateMaxProfitLoss(payoff);
+      const {
+        maxProfit: mp,
+        maxLoss: ml,
+        isUnlimitedProfit: unlimitedProfit,
+        isUnlimitedLoss: unlimitedLoss,
+      } = calculateMaxProfitLoss(payoff);
+      const tailRisk = classifyUpperTailRisk(allLegs);
 
       // Greeks: sum across all legs
       const combinedGreeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
@@ -664,7 +732,7 @@ export function OptionsCalculator({
         const dte =
           chain.expirations.find(
             (e) => e.expirationDate === leg.contract.expirationDate,
-          )?.daysToExpiry ?? 30;
+          )?.daysToExpiry ?? fallbackDaysToExpiry(leg.contract.expirationDate);
         const greeks = calculateGreeks({
           spotPrice: chain.underlyingPrice,
           strikePrice: leg.contract.strikePrice,
@@ -701,7 +769,7 @@ export function OptionsCalculator({
         return (intrinsic * mult - leg.premium * mult) * leg.quantity * 100;
       };
 
-      const legSums = optionLegs.map((leg, i) => {
+      const legSums = mixedExpiry ? [] : optionLegs.map((leg, i) => {
         const label = `${leg.positionType === "long" ? "BUY" : "SELL"} ${leg.quantity}x ${leg.optionType.toUpperCase()} $${leg.strikePrice.toFixed(0)}`;
 
         // Scan payoff points for this leg's max/min
@@ -746,15 +814,22 @@ export function OptionsCalculator({
       const pt = parseFloat(priceTarget);
       let profitAtTarget: number | null = null;
       if (!isNaN(pt) && pt > 0) {
-        profitAtTarget = 0;
-        for (const leg of optionLegs) {
-          profitAtTarget += legPLAtExpiry(leg, pt);
+        if (mixedExpiry) {
+          profitAtTarget = calculateStrategyProfitLossAtDate(allLegs, pt, {
+            daysForward: selectedDaysForward,
+            riskFreeRate: DEFAULT_RISK_FREE_RATE,
+          }).profitLoss;
+        } else {
+          profitAtTarget = 0;
+          for (const leg of optionLegs) {
+            profitAtTarget += legPLAtExpiry(leg, pt);
+          }
+          for (const leg of stockLegs) {
+            const mult = leg.positionType === "long" ? 1 : -1;
+            profitAtTarget += (pt - leg.entryPrice) * mult * leg.quantity;
+          }
+          profitAtTarget = Math.round(profitAtTarget * 100) / 100;
         }
-        for (const leg of stockLegs) {
-          const mult = leg.positionType === "long" ? 1 : -1;
-          profitAtTarget += (pt - leg.entryPrice) * mult * leg.quantity;
-        }
-        profitAtTarget = Math.round(profitAtTarget * 100) / 100;
       }
 
       // Max DTE across all legs (for heatmap date range)
@@ -762,7 +837,7 @@ export function OptionsCalculator({
       for (const leg of legs) {
         const dte = chain.expirations.find(
           (e) => e.expirationDate === leg.contract.expirationDate,
-        )?.daysToExpiry ?? 30;
+        )?.daysToExpiry ?? fallbackDaysToExpiry(leg.contract.expirationDate);
         if (dte > maxLegDte) maxLegDte = dte;
       }
 
@@ -774,13 +849,14 @@ export function OptionsCalculator({
         totalQty += leg.quantity;
       }
       const avgIV = totalQty > 0 ? weightedIV / totalQty : 0.3;
-      const cop = maxLegDte > 0
+      const probabilityHorizon = mixedExpiry ? selectedDaysForward : maxLegDte;
+      const cop = probabilityHorizon > 0
         ? calculateChanceOfProfit(
             payoff,
             breakEvens,
             chain.underlyingPrice,
             avgIV,
-            maxLegDte / CALENDAR_DAYS_PER_YEAR,
+            probabilityHorizon / CALENDAR_DAYS_PER_YEAR,
             DEFAULT_RISK_FREE_RATE,
           )
         : null;
@@ -801,6 +877,19 @@ export function OptionsCalculator({
         chanceOfProfit: cop,
         isUnlimitedProfit: unlimitedProfit,
         isUnlimitedLoss: unlimitedLoss,
+        isMixedExpiry: mixedExpiry,
+        selectedExpiryLabel: selectedExpiry?.expirationDate ?? nearestExpiry?.expirationDate ?? latestExpiry?.expirationDate ?? null,
+        selectedExpiryApproximate: mixedExpiry && !!selectedExpiry && selectedExpiry.expirationDate !== nearestExpiry?.expirationDate,
+        expiryInfo: expiryDetails,
+        scenarioOptionLegs: optionLegs,
+        scenarioStockLeg: stockLeg
+          ? {
+              positionType: stockLeg.positionType,
+              quantity: stockLeg.quantity,
+              entryPrice: stockLeg.entryPrice,
+            }
+          : null,
+        hasUnlimitedUpsideLoss: tailRisk.isUnlimitedLoss,
       };
     }, [chain, legs, stockLeg, priceTarget]);
 
@@ -1208,7 +1297,7 @@ export function OptionsCalculator({
             )}
 
             {/* Unlimited loss warning */}
-            {isUnlimitedLoss && (
+            {hasUnlimitedUpsideLoss && (
               <div className="flex items-start gap-2 rounded-md border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
                 <span className="font-bold text-sm leading-none mt-px">!</span>
                 <span>
@@ -1390,26 +1479,32 @@ export function OptionsCalculator({
         <Card>
           <CardHeader>
             <CardTitle>
-              Payoff at Expiration
+              {isMixedExpiry ? "Front-Expiry Decision View" : "Payoff at Expiration"}
               {legs.length > 1 && (
                 <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                   ({legs.length} legs)
                 </span>
               )}
             </CardTitle>
+            {isMixedExpiry && (
+              <p className="text-xs text-muted-foreground">
+                {selectedExpiryLabel} is shown as the exact front-expiry decision point. Later expiries depend on what happens here, so use the Scenario Path below to model carry-forward outcomes.
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             <PayoffDiagram
               data={payoffData}
               breakEvenPoints={breakEvenPoints}
               currentPrice={chain.underlyingPrice}
+              priceAxisLabel={isMixedExpiry ? `Underlying Price on ${selectedExpiryLabel}` : undefined}
             />
           </CardContent>
         </Card>
       )}
 
       {/* Time Slider — payoff over time */}
-      {strategyLegs.length > 0 && chain && maxDte > 0 && (
+      {strategyLegs.length > 0 && chain && maxDte > 0 && !isMixedExpiry && (
         <Card>
           <CardContent className="pt-6">
             <TimeSlider
@@ -1421,8 +1516,17 @@ export function OptionsCalculator({
         </Card>
       )}
 
+      {isMixedExpiry && chain && (
+        <MixedExpiryScenarioPanel
+          optionLegs={scenarioOptionLegs}
+          stockLeg={scenarioStockLeg}
+          expiryInfo={expiryInfo}
+          currentPrice={chain.underlyingPrice}
+        />
+      )}
+
       {/* P&L Heatmap */}
-      {strategyLegs.length > 0 && chain && maxDte > 0 && (
+      {strategyLegs.length > 0 && chain && maxDte > 0 && !isMixedExpiry && (
         <Card>
           <CardHeader>
             <CardTitle>
@@ -1454,6 +1558,9 @@ export function OptionsCalculator({
           chanceOfProfit={chanceOfProfit}
           isUnlimitedProfit={isUnlimitedProfit}
           isUnlimitedLoss={isUnlimitedLoss}
+          mixedExpiry={isMixedExpiry}
+          summaryDateLabel={selectedExpiryLabel}
+          summaryApproximate={selectedExpiryApproximate}
         />
       )}
 

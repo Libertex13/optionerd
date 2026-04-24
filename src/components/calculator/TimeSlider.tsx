@@ -12,8 +12,7 @@ import {
   Tooltip,
   ReferenceLine,
 } from "recharts";
-import type { OptionLeg, StrategyLeg, PayoffPoint } from "@/types/options";
-import { isOptionLeg } from "@/types/options";
+import type { StrategyLeg } from "@/types/options";
 import {
   generatePayoffAtExpiry,
   generatePayoffAtDate,
@@ -85,18 +84,14 @@ export function TimeSlider({
   daysToExpiry,
 }: TimeSliderProps) {
   const [dayElapsed, setDayElapsed] = useState(0);
-
-  const optionLegs = legs.filter(isOptionLeg) as OptionLeg[];
-  if (optionLegs.length === 0) return null;
+  const referenceCurveLabel = "At expiry";
 
   const { expiryData, datedData, todayData, breakEvens, stats } =
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     useMemo(() => {
       const expiryPoints = generatePayoffAtExpiry(legs, currentPrice);
-      const datedPoints =
-        dayElapsed >= daysToExpiry
-          ? expiryPoints
-          : generatePayoffAtDate(legs, currentPrice, dayElapsed, DEFAULT_RISK_FREE_RATE);
+      const datedPoints = dayElapsed >= daysToExpiry
+        ? expiryPoints
+        : generatePayoffAtDate(legs, currentPrice, dayElapsed, DEFAULT_RISK_FREE_RATE);
       const todayPoints = generatePayoffAtDate(
         legs,
         currentPrice,
@@ -208,7 +203,7 @@ export function TimeSlider({
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-neutral-500" />
-              At expiry
+              {referenceCurveLabel}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-blue-400" />

@@ -18,6 +18,7 @@ interface PayoffDiagramProps {
   data: PayoffPoint[];
   breakEvenPoints: number[];
   currentPrice: number;
+  priceAxisLabel?: string;
 }
 
 // Custom tooltip with green/red P&L coloring
@@ -53,6 +54,7 @@ export function PayoffDiagram({
   data,
   breakEvenPoints,
   currentPrice,
+  priceAxisLabel = "Underlying Price at Expiration",
 }: PayoffDiagramProps) {
   const chartData = data.map((point) => ({
     price: point.underlyingPrice,
@@ -113,7 +115,7 @@ export function PayoffDiagram({
             tick={{ fill: "var(--color-muted-foreground)" }}
             tickMargin={8}
             label={{
-              value: "Underlying Price at Expiration",
+              value: priceAxisLabel,
               position: "insideBottom",
               offset: -48,
               fill: "var(--color-muted-foreground)",

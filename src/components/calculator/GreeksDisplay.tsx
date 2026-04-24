@@ -15,14 +15,17 @@ interface GreeksDisplayProps {
   contractPrice: number;
   breakEvenPoints: number[];
   underlyingPrice: number;
-  maxProfit: number;
-  maxLoss: number;
+  maxProfit: number | null;
+  maxLoss: number | null;
   profitAtTarget: number | null;
   priceTarget: number | null;
   legSummaries: LegSummary[];
   chanceOfProfit: number | null;
   isUnlimitedProfit: boolean;
   isUnlimitedLoss: boolean;
+  mixedExpiry?: boolean;
+  summaryDateLabel?: string | null;
+  summaryApproximate?: boolean;
 }
 
 function rrPct(profit: number, loss: number): string {
@@ -58,12 +61,14 @@ export function GreeksDisplay({
   chanceOfProfit,
   isUnlimitedProfit,
   isUnlimitedLoss,
+  mixedExpiry = false,
+  summaryDateLabel = null,
+  summaryApproximate = false,
 }: GreeksDisplayProps) {
-  const absMaxLoss = Math.abs(maxLoss);
+  const absMaxLoss = maxLoss !== null ? Math.abs(maxLoss) : null;
   const hasTarget = profitAtTarget !== null && priceTarget !== null && priceTarget > 0;
-  const showLegs = legSummaries.length > 1;
+  const showLegs = !mixedExpiry && legSummaries.length > 1;
 
-  // Break-even distance from current price
   const breakEvenSubs = breakEvenPoints.map((be) => {
     const pct = ((be - underlyingPrice) / underlyingPrice) * 100;
     const sign = pct >= 0 ? "+" : "";
@@ -72,7 +77,6 @@ export function GreeksDisplay({
 
   return (
     <div className="space-y-3">
-      {/* Basics */}
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
         <MetricCell
           label="Contract Price"
@@ -82,12 +86,20 @@ export function GreeksDisplay({
         <MetricCell
           label="Break Even"
           value={breakEvenPoints.length > 0 ? breakEvenPoints.map((b) => formatCurrency(b)).join(", ") : "\u2014"}
-          sub={breakEvenSubs.length > 0 ? breakEvenSubs.join(", ") : "at expiration"}
+          sub={
+            mixedExpiry
+              ? (summaryDateLabel ? `at ${summaryDateLabel}${summaryApproximate ? " · conditional" : ""}` : "at selected expiry")
+              : (breakEvenSubs.length > 0 ? breakEvenSubs.join(", ") : "at expiration")
+          }
         />
         <MetricCell
           label="Chance of Profit"
           value={chanceOfProfit !== null ? `${(chanceOfProfit * 100).toFixed(1)}%` : "\u2014"}
-          sub="at expiration"
+          sub={
+            mixedExpiry
+              ? (summaryDateLabel ? `by ${summaryDateLabel}${summaryApproximate ? " · conditional" : ""}` : "by selected expiry")
+              : "at expiration"
+          }
           className={
             chanceOfProfit !== null
               ? chanceOfProfit >= 0.5
@@ -98,54 +110,70 @@ export function GreeksDisplay({
         />
       </div>
 
-      {/* Max scenario */}
-      <div className={`grid gap-px overflow-hidden rounded-md border border-border bg-border ${hasTarget ? "grid-cols-3" : "grid-cols-2 lg:grid-cols-4"}`}>
-        <MetricCell
-          label="Max Profit"
-          value={isUnlimitedProfit ? "Unlimited" : formatCurrency(maxProfit)}
-          className="text-green-600 dark:text-green-400"
-        />
-        <MetricCell
-          label="Max Loss"
-          value={isUnlimitedLoss ? "Unlimited" : formatCurrency(maxLoss)}
-          className="text-red-600 dark:text-red-400"
-        />
-        <MetricCell
-          label="R/R"
-          value={isUnlimitedProfit ? "Unlimited" : (absMaxLoss > 0 ? rrPct(maxProfit, absMaxLoss) : "\u2014")}
-          className={isUnlimitedProfit ? "text-green-600 dark:text-green-400" : (absMaxLoss > 0 ? rrColor(maxProfit, absMaxLoss) : "")}
-        />
-        {!hasTarget && (
-          <MetricCell
-            label="Max Risk"
-            value={formatCurrency(absMaxLoss)}
-            sub="total position"
-          />
-        )}
-      </div>
+      {mixedExpiry && (
+        <div className="rounded-md border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          {summaryApproximate
+            ? `Mixed expiries detected. ${summaryDateLabel ?? "This later expiry"} is shown as a conditional view, assuming the selected price applies at that date.`
+            : `Mixed expiries detected. ${summaryDateLabel ?? "This front expiry"} is an exact front-expiry view; use the Scenario Path below to inspect later conditional outcomes.`}
+        </div>
+      )}
 
-      {/* At target — mirrors the row above */}
+      {!mixedExpiry && (
+        <div className={`grid gap-px overflow-hidden rounded-md border border-border bg-border ${hasTarget ? "grid-cols-3" : "grid-cols-2 lg:grid-cols-4"}`}>
+          <MetricCell
+            label="Max Profit"
+            value={isUnlimitedProfit ? "Unlimited" : formatCurrency(maxProfit ?? 0)}
+            className="text-green-600 dark:text-green-400"
+          />
+          <MetricCell
+            label="Max Loss"
+            value={isUnlimitedLoss ? "Unlimited" : formatCurrency(maxLoss ?? 0)}
+            className="text-red-600 dark:text-red-400"
+          />
+          <MetricCell
+            label="R/R"
+            value={isUnlimitedProfit ? "Unlimited" : (absMaxLoss && absMaxLoss > 0 && maxProfit !== null ? rrPct(maxProfit, absMaxLoss) : "\u2014")}
+            className={
+              isUnlimitedProfit
+                ? "text-green-600 dark:text-green-400"
+                : (absMaxLoss && absMaxLoss > 0 && maxProfit !== null ? rrColor(maxProfit, absMaxLoss) : "")
+            }
+          />
+          {!hasTarget && (
+            <MetricCell
+              label="Max Risk"
+              value={formatCurrency(absMaxLoss ?? 0)}
+              sub="total position"
+            />
+          )}
+        </div>
+      )}
+
       {hasTarget && (
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
+        <div className={`grid gap-px overflow-hidden rounded-md border border-border bg-border ${mixedExpiry ? "grid-cols-1" : "grid-cols-3"}`}>
           <MetricCell
             label={`Profit at $${priceTarget.toFixed(0)}`}
             value={formatCurrency(profitAtTarget)}
             className={plColor(profitAtTarget)}
+            sub={mixedExpiry && summaryDateLabel ? `at ${summaryDateLabel}` : undefined}
           />
-          <MetricCell
-            label="Max Risk"
-            value={formatCurrency(absMaxLoss)}
-            sub="total position"
-          />
-          <MetricCell
-            label="R/R at Target"
-            value={absMaxLoss > 0 ? rrPct(profitAtTarget, absMaxLoss) : "\u2014"}
-            className={absMaxLoss > 0 ? rrColor(profitAtTarget, absMaxLoss) : ""}
-          />
+          {!mixedExpiry && (
+            <MetricCell
+              label="Max Risk"
+              value={formatCurrency(absMaxLoss ?? 0)}
+              sub="total position"
+            />
+          )}
+          {!mixedExpiry && (
+            <MetricCell
+              label="R/R at Target"
+              value={absMaxLoss && absMaxLoss > 0 ? rrPct(profitAtTarget, absMaxLoss) : "\u2014"}
+              className={absMaxLoss && absMaxLoss > 0 ? rrColor(profitAtTarget, absMaxLoss) : ""}
+            />
+          )}
         </div>
       )}
 
-      {/* Per-leg P&L breakdown */}
       {showLegs && (
         <div className="rounded-md border border-border overflow-hidden">
           <table className="w-full text-xs font-mono">
@@ -184,7 +212,6 @@ export function GreeksDisplay({
         </div>
       )}
 
-      {/* Greeks — compact horizontal strip */}
       <div className="grid grid-cols-5 gap-px overflow-hidden rounded-md border border-border bg-border">
         {(Object.entries(greeks) as [keyof Greeks, number][]).map(([name, value]) => (
           <div key={name} className="bg-card px-3 py-2">
