@@ -10,7 +10,11 @@ import "server-only";
  */
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+// Gemini 3 Lite — cheap + fast + multimodal, solid instruction following.
+// Override via OPENROUTER_VISION_MODEL / OPENROUTER_TEXT_MODEL env vars to
+// A/B test (e.g. bump to gemini-3-pro or claude-sonnet-4.5 for tough pastes).
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview";
+const DEFAULT_TEXT_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 export interface VisionCallOptions {
   /** base64-encoded image content (no data: prefix) */
@@ -51,7 +55,8 @@ export async function visionToJson<T>(
   opts: VisionCallOptions,
 ): Promise<VisionResult<T>> {
   const apiKey = assertConfigured();
-  const model = opts.model ?? process.env.OPENROUTER_VISION_MODEL ?? DEFAULT_MODEL;
+  const model =
+    opts.model ?? process.env.OPENROUTER_VISION_MODEL ?? DEFAULT_MODEL;
 
   const body = {
     model,
@@ -85,7 +90,9 @@ export async function visionToJson<T>(
 
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(`OpenRouter error (${res.status}): ${detail.slice(0, 500)}`);
+    throw new Error(
+      `OpenRouter error (${res.status}): ${detail.slice(0, 500)}`,
+    );
   }
 
   const json = await res.json();
@@ -99,6 +106,83 @@ export async function visionToJson<T>(
     parsed = JSON.parse(content) as T;
   } catch (err) {
     // Some models wrap JSON in ```json fences — try stripping those.
+    const cleaned = content
+      .replace(/^\s*```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/i, "");
+    try {
+      parsed = JSON.parse(cleaned) as T;
+    } catch {
+      throw new Error(
+        `Model returned non-JSON content: ${content.slice(0, 300)} — parse error: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  return {
+    data: parsed,
+    model,
+    usage: json?.usage,
+  };
+}
+
+export interface TextCallOptions {
+  /** The user text to analyze (broker statement paste, CSV, etc.) */
+  input: string;
+  /** System-style instruction describing what to extract and the output schema */
+  prompt: string;
+  /** Override the default model */
+  model?: string;
+}
+
+/**
+ * Call OpenRouter with text-only input + prompt, expecting JSON back.
+ * Same shape as visionToJson but without an image — used for broker
+ * statement parsing, CSV normalization, etc.
+ */
+export async function textToJson<T>(
+  opts: TextCallOptions,
+): Promise<VisionResult<T>> {
+  const apiKey = assertConfigured();
+  const model =
+    opts.model ?? process.env.OPENROUTER_TEXT_MODEL ?? DEFAULT_TEXT_MODEL;
+
+  const body = {
+    model,
+    messages: [
+      { role: "system", content: opts.prompt },
+      { role: "user", content: opts.input },
+    ],
+    response_format: { type: "json_object" },
+  };
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://optionerd.com",
+      "X-Title": "optioNerd",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(
+      `OpenRouter error (${res.status}): ${detail.slice(0, 500)}`,
+    );
+  }
+
+  const json = await res.json();
+  const content: string | undefined = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("OpenRouter response missing content");
+  }
+
+  let parsed: T;
+  try {
+    parsed = JSON.parse(content) as T;
+  } catch (err) {
     const cleaned = content
       .replace(/^\s*```(?:json)?\s*/i, "")
       .replace(/\s*```\s*$/i, "");

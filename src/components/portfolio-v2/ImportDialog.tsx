@@ -2,10 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import styles from "./portfolio.module.css";
-import {
-  parseBrokerPaste,
-  type ParsedPositionDraft,
-} from "@/lib/portfolio/importParser";
+import type { ParsedPositionDraft } from "@/lib/portfolio/importParser";
 
 interface ImportDialogProps {
   onClose: () => void;
@@ -17,16 +14,15 @@ type Mode = "paste" | "screenshot";
 export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   const [mode, setMode] = useState<Mode>("paste");
 
-  // Paste mode state
+  // Paste mode state (now AI-parsed — accepts any broker statement format)
   const [text, setText] = useState("");
-  const [skipped, setSkipped] = useState<{ line: string; reason: string }[]>([]);
+  const [parsingText, setParsingText] = useState(false);
 
   // Screenshot mode state
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [modelInfo, setModelInfo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Shared state
@@ -34,6 +30,8 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   const [parsed, setParsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelInfo, setModelInfo] = useState<string | null>(null);
+  const [skippedCount, setSkippedCount] = useState(0);
 
   const totalCost = useMemo(
     () => rows.reduce((s, r) => s + r.cost_basis, 0),
@@ -43,7 +41,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   function resetPreview() {
     setRows([]);
     setParsed(false);
-    setSkipped([]);
+    setSkippedCount(0);
     setModelInfo(null);
     setError(null);
   }
@@ -54,13 +52,31 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     resetPreview();
   }
 
-  // ─── Paste mode ──────────────────────────────────────
-  function handleParsePaste() {
+  // ─── Paste mode (AI-parsed) ──────────────────────────
+  async function handleParsePaste() {
+    if (!text.trim() || parsingText) return;
+    setParsingText(true);
     setError(null);
-    const result = parseBrokerPaste(text);
-    setRows(result.rows);
-    setSkipped(result.skipped);
-    setParsed(true);
+    try {
+      const res = await fetch("/api/positions/import/statement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Parse failed");
+        return;
+      }
+      setRows(Array.isArray(body.positions) ? body.positions : []);
+      setSkippedCount(typeof body.skipped === "number" ? body.skipped : 0);
+      setParsed(true);
+      if (body.model) setModelInfo(body.model);
+    } catch {
+      setError("Network error");
+    } finally {
+      setParsingText(false);
+    }
   }
 
   // ─── Screenshot mode ─────────────────────────────────
@@ -88,7 +104,6 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     if (!file) return;
     setExtracting(true);
     setError(null);
-    setSkipped([]);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -102,6 +117,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         return;
       }
       setRows(Array.isArray(body.positions) ? body.positions : []);
+      setSkippedCount(typeof body.skipped === "number" ? body.skipped : 0);
       setParsed(true);
       if (body.model) setModelInfo(body.model);
     } catch {
@@ -142,7 +158,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
 
   const subCopy =
     mode === "paste"
-      ? "Paste rows from your broker's positions table (tab-separated)."
+      ? "Paste anything from your broker — positions table, CSV, statement text. AI figures out the format."
       : "Upload a screenshot of your broker's positions table. AI will extract each row.";
 
   return (
@@ -184,12 +200,12 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
           {mode === "paste" && (
             <>
               <label className={styles.microLabel} style={{ display: "block", marginBottom: 6 }}>
-                Paste broker rows
+                Paste broker statement
               </label>
               <textarea
                 className={styles.importTextarea}
                 placeholder={
-                  "FORM 260515\tFORM May 15 125 Call\t2 Long\t$2,290.00\t15.25\t24.40\t$1,200.00\t1,145.00\t75.08%\t$3,050.00\t$5,340.00\tApr 29, 2026 PM\t27.90\t53"
+                  "Paste rows from TradeStation, IBKR, Schwab, Fidelity, tastytrade — or any CSV/text export. Multi-leg spreads, calendars, and condors are grouped automatically."
                 }
                 value={text}
                 onChange={(e) => {
@@ -202,14 +218,27 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                 <button
                   className={`${styles.btn}`}
                   onClick={handleParsePaste}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || parsingText}
                 >
-                  Parse
+                  {parsingText ? "Parsing…" : "Parse"}
                 </button>
+                {text && !parsingText && (
+                  <button
+                    className={`${styles.btn} ${styles.btnGhost}`}
+                    onClick={() => {
+                      setText("");
+                      resetPreview();
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
                 {parsed && (
                   <span className={styles.importSummary}>
-                    {rows.length} parsed · {skipped.length} skipped ·{" "}
+                    {rows.length} parsed
+                    {skippedCount > 0 ? ` · ${skippedCount} skipped` : ""} ·{" "}
                     ${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost
+                    {modelInfo && ` · ${modelInfo}`}
                   </span>
                 )}
               </div>
@@ -279,7 +308,8 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                 )}
                 {parsed && (
                   <span className={styles.importSummary}>
-                    {rows.length} extracted ·{" "}
+                    {rows.length} extracted
+                    {skippedCount > 0 ? ` · ${skippedCount} skipped` : ""} ·{" "}
                     ${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost
                     {modelInfo && ` · ${modelInfo}`}
                   </span>
@@ -342,25 +372,12 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             </div>
           )}
 
-          {mode === "paste" && parsed && skipped.length > 0 && (
-            <details className={styles.skippedBlock}>
-              <summary>{skipped.length} line(s) skipped — click to review</summary>
-              <ul>
-                {skipped.map((s, i) => (
-                  <li key={i}>
-                    <span className={styles.skipReason}>{s.reason}</span>
-                    <span className={styles.skipLine}>{s.line}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-
-          {mode === "paste" && parsed && rows.length === 0 && skipped.length > 0 && (
+          {mode === "paste" && parsed && rows.length === 0 && (
             <div className={styles.importHint}>
-              Nothing parsed. Make sure your paste includes a description cell like{" "}
-              <code>FORM May 15 125 Call</code> followed by a position cell like{" "}
-              <code>2 Long</code>, and that columns are tab-separated.
+              No option positions detected in that paste. Include a line that
+              identifies the contract (ticker, expiration, strike, call/put),
+              the quantity, and an entry price. CSV, tab-separated, or plain
+              broker copy-paste all work.
             </div>
           )}
 

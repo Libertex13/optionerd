@@ -1,30 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { visionToJson } from "@/lib/openrouter/vision";
-import type { ParsedPositionDraft } from "@/lib/portfolio/importParser";
-import type { PositionLeg } from "@/lib/portfolio/types";
+import {
+  isValidExtractedPosition,
+  toParsedDraft,
+  type ExtractionResult,
+} from "@/lib/portfolio/extract";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME = /^image\/(png|jpe?g|webp|gif)$/i;
-
-interface ExtractedLeg {
-  side: "long" | "short";
-  option_type: "call" | "put";
-  strike: number;
-  quantity: number;
-  entry_premium: number;
-  expiration_date: string; // YYYY-MM-DD
-}
-interface ExtractedPosition {
-  ticker: string;
-  description: string;
-  legs: ExtractedLeg[];
-  cost_basis: number | null;
-}
-interface ExtractionResult {
-  positions: ExtractedPosition[];
-  notes?: string;
-}
 
 const EXTRACTION_PROMPT = `You are reading a screenshot of a brokerage positions table.
 
@@ -70,88 +54,6 @@ Rules:
 - Skip rows where any required leg field is missing or unreadable.
 - If the screenshot shows no option positions, return { "positions": [] }.
 - Return ONLY the JSON object.`;
-
-function inferStrategy(legs: PositionLeg[]): string {
-  if (legs.length === 1) {
-    const l = legs[0];
-    return `${l.side}-${l.type}`;
-  }
-  const calls = legs.filter((l) => l.type === "call");
-  const puts = legs.filter((l) => l.type === "put");
-  const longs = legs.filter((l) => l.side === "long");
-  const shorts = legs.filter((l) => l.side === "short");
-  const expirations = new Set(legs.map((l) => l.expiration_date));
-  const strikes = new Set(legs.map((l) => l.strike));
-
-  if (legs.length === 2) {
-    // Calendar: same option type, same strike, different expiries
-    if (
-      strikes.size === 1 &&
-      expirations.size === 2 &&
-      (calls.length === 2 || puts.length === 2) &&
-      longs.length === 1 &&
-      shorts.length === 1
-    ) {
-      return puts.length === 2 ? "put-calendar" : "call-calendar";
-    }
-    // Vertical spread: same expiry, different strikes, same option type
-    if (
-      expirations.size === 1 &&
-      (calls.length === 2 || puts.length === 2) &&
-      longs.length === 1 &&
-      shorts.length === 1
-    ) {
-      return puts.length === 2 ? "put-spread" : "call-spread";
-    }
-    // Straddle / strangle
-    if (calls.length === 1 && puts.length === 1) {
-      if (longs.length === 2) return "long-straddle";
-      if (shorts.length === 2) return "short-straddle";
-    }
-  }
-  if (legs.length === 4 && calls.length === 2 && puts.length === 2) {
-    return "iron-condor";
-  }
-  return "custom";
-}
-
-function toParsedDraft(p: ExtractedPosition): ParsedPositionDraft {
-  const legs: PositionLeg[] = p.legs.map((l) => ({
-    side: l.side,
-    type: l.option_type,
-    strike: l.strike,
-    entry_premium: l.entry_premium,
-    quantity: l.quantity,
-    expiration_date: l.expiration_date,
-    implied_volatility: 0,
-  }));
-  const computed = legs.reduce(
-    (s, l) => s + l.entry_premium * l.quantity * 100,
-    0,
-  );
-  const cost = p.cost_basis != null ? Math.abs(p.cost_basis) : computed;
-  return {
-    name: p.description,
-    ticker: p.ticker.toUpperCase(),
-    strategy: inferStrategy(legs),
-    cost_basis: cost,
-    legs,
-  };
-}
-
-function isValidLeg(l: unknown): l is ExtractedLeg {
-  if (!l || typeof l !== "object") return false;
-  const x = l as Record<string, unknown>;
-  return (
-    (x.side === "long" || x.side === "short") &&
-    (x.option_type === "call" || x.option_type === "put") &&
-    typeof x.strike === "number" &&
-    typeof x.quantity === "number" &&
-    typeof x.entry_premium === "number" &&
-    typeof x.expiration_date === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(x.expiration_date)
-  );
-}
 
 /**
  * POST /api/positions/import/screenshot
@@ -212,15 +114,7 @@ export async function POST(request: Request) {
       ? result.data.positions
       : [];
     const rows = extracted
-      .filter(
-        (p): p is ExtractedPosition =>
-          !!p &&
-          typeof p.ticker === "string" &&
-          typeof p.description === "string" &&
-          Array.isArray(p.legs) &&
-          p.legs.length > 0 &&
-          p.legs.every(isValidLeg),
-      )
+      .filter(isValidExtractedPosition)
       .map(toParsedDraft);
 
     return NextResponse.json({
