@@ -4,7 +4,7 @@ export interface ParsedPositionDraft {
   name: string;
   ticker: string;
   strategy: string;
-  cost_basis: number;
+  cost_basis: number | null;
   legs: PositionLeg[];
 }
 

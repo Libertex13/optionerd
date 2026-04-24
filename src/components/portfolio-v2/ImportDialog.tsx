@@ -34,7 +34,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   const [skippedCount, setSkippedCount] = useState(0);
 
   const totalCost = useMemo(
-    () => rows.reduce((s, r) => s + r.cost_basis, 0),
+    () => rows.reduce((s, r) => s + (r.cost_basis ?? 0), 0),
     [rows],
   );
 
@@ -237,7 +237,9 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                   <span className={styles.importSummary}>
                     {rows.length} parsed
                     {skippedCount > 0 ? ` · ${skippedCount} skipped` : ""} ·{" "}
-                    ${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost
+                    {rows.some((r) => r.cost_basis == null)
+                      ? "risk auto-calculated on import"
+                      : `$${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost`}
                     {modelInfo && ` · ${modelInfo}`}
                   </span>
                 )}
@@ -310,7 +312,9 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                   <span className={styles.importSummary}>
                     {rows.length} extracted
                     {skippedCount > 0 ? ` · ${skippedCount} skipped` : ""} ·{" "}
-                    ${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost
+                    {rows.some((r) => r.cost_basis == null)
+                      ? "risk auto-calculated on import"
+                      : `$${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })} total cost`}
                     {modelInfo && ` · ${modelInfo}`}
                   </span>
                 )}
@@ -336,7 +340,9 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                       className={styles.mono}
                       style={{ textAlign: "right", fontWeight: 600 }}
                     >
-                      ${r.cost_basis.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                      {r.cost_basis == null
+                        ? "Auto"
+                        : `$${r.cost_basis.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
                     </div>
                     <button
                       className={styles.previewRm}

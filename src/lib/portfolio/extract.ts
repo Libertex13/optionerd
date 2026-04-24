@@ -73,18 +73,11 @@ export function toParsedDraft(p: ExtractedPosition): ParsedPositionDraft {
     expiration_date: l.expiration_date,
     implied_volatility: 0,
   }));
-  // Always compute cost from legs — the AI sometimes grabs "Market Value"
-  // instead of "Total Cost" when they sit in adjacent columns, which then
-  // feeds bad denominators into % P/L and scenario math.
-  const cost = legs.reduce(
-    (s, l) => s + l.entry_premium * l.quantity * 100,
-    0,
-  );
   return {
     name: p.description,
     ticker: p.ticker.toUpperCase(),
     strategy: inferStrategy(legs),
-    cost_basis: cost,
+    cost_basis: null,
     legs,
   };
 }
