@@ -114,6 +114,7 @@ export interface PortfolioPosition {
   px: number;           // current underlying (live if feed available, else entry)
   pxLive: boolean;      // true when px comes from a live quote
   legs: PortfolioLeg[];
+  stockLeg: PositionStockLeg | null;
   net: number;          // credit (+) / debit (−) in dollars
   dte: number;          // days to nearest expiry
   dteMax: number;       // span from entry to latest expiry (for progress bar)

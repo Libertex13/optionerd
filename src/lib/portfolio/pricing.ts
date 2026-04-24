@@ -1,106 +1,162 @@
+import { blackScholesPrice } from "@/lib/pricing/black-scholes";
+import { calculateGreeks } from "@/lib/pricing/greeks";
+import {
+  calculateRiskCapital,
+  calculateStrategyProfitLossAtDate,
+  calculateStrategyProfitLossAtExpiry,
+  calculateTimeToExpiryYears,
+  calculateMaxProfitLoss,
+  findBreakEvenPoints,
+  generatePayoffAtExpiry,
+} from "@/lib/pricing/payoff";
+import { calculateChanceOfProfit } from "@/lib/pricing/probability";
+import type { OptionLeg, StockLeg, StrategyLeg } from "@/types/options";
 import type {
   LegMark,
   PortfolioLeg,
   PortfolioPosition,
+  PositionStockLeg,
   Scenario,
 } from "./types";
 
 export type { LegMark };
 
-export function cumulativeNormal(x: number): number {
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const sign = x < 0 ? -1 : 1;
-  const xAbs = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + p * xAbs);
-  const y =
-    1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-xAbs * xAbs);
-  return 0.5 * (1 + sign * y);
+function toOptionLeg(leg: PortfolioLeg): OptionLeg {
+  return {
+    optionType: leg.t,
+    positionType: leg.s,
+    strikePrice: leg.k,
+    premium: leg.p,
+    quantity: leg.q,
+    expirationDate: leg.exp,
+    impliedVolatility: leg.iv && leg.iv > 0 ? leg.iv : 0.28,
+  };
 }
 
-export function normalPdf(x: number): number {
-  return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI);
+function toStockLeg(stockLeg: PositionStockLeg): StockLeg {
+  return {
+    positionType: stockLeg.side,
+    quantity: stockLeg.quantity,
+    entryPrice: stockLeg.entry_price,
+  };
 }
 
-export function blackScholes(
+export function toStrategyLegs(
+  legs: PortfolioLeg[],
+  stockLeg: PositionStockLeg | null = null,
+): StrategyLeg[] {
+  const strategyLegs: StrategyLeg[] = legs.map(toOptionLeg);
+  if (stockLeg) {
+    strategyLegs.push(toStockLeg(stockLeg));
+  }
+  return strategyLegs;
+}
+
+function pricingInputForLeg(
+  leg: PortfolioLeg,
   S: number,
-  K: number,
-  T: number,
+  now: Date,
   r: number,
-  iv: number,
-  type: "call" | "put",
+) {
+  return {
+    spotPrice: S,
+    strikePrice: leg.k,
+    timeToExpiry: calculateTimeToExpiryYears(leg.exp, 0, now),
+    riskFreeRate: r,
+    volatility: leg.iv && leg.iv > 0 ? leg.iv : 0.28,
+    optionType: leg.t,
+  } as const;
+}
+
+function stockProfitLoss(
+  stockLeg: PositionStockLeg,
+  spotPrice: number,
 ): number {
-  if (T <= 0) {
-    return type === "call" ? Math.max(S - K, 0) : Math.max(K - S, 0);
-  }
-  const d1 = (Math.log(S / K) + (r + (iv * iv) / 2) * T) / (iv * Math.sqrt(T));
-  const d2 = d1 - iv * Math.sqrt(T);
-  if (type === "call") {
-    return S * cumulativeNormal(d1) - K * Math.exp(-r * T) * cumulativeNormal(d2);
-  }
-  return K * Math.exp(-r * T) * cumulativeNormal(-d2) - S * cumulativeNormal(-d1);
+  const sign = stockLeg.side === "long" ? 1 : -1;
+  return (spotPrice - stockLeg.entry_price) * sign * stockLeg.quantity;
 }
 
-export function payoffAtExpiry(legs: PortfolioLeg[], S: number): number {
-  return legs.reduce((acc, l) => {
-    const intr = l.t === "call" ? Math.max(S - l.k, 0) : Math.max(l.k - S, 0);
-    const mult = (l.s === "long" ? 1 : -1) * (l.q || 1);
-    return acc + (intr - l.p) * mult * 100;
+function referencePrice(position: PortfolioPosition): number {
+  if (position.px > 0) return position.px;
+  if (position.stockLeg?.entry_price) return position.stockLeg.entry_price;
+  if (position.legs.length > 0) {
+    return position.legs.reduce((sum, leg) => sum + leg.k, 0) / position.legs.length;
+  }
+  return 1;
+}
+
+function maxDaysToExpiry(position: PortfolioPosition, now: Date = new Date()): number {
+  return position.legs.reduce((maxDte, leg) => {
+    const dte = Math.ceil(calculateTimeToExpiryYears(leg.exp, 0, now) * 365);
+    return Math.max(maxDte, dte);
   }, 0);
 }
 
-export function mtm(legs: PortfolioLeg[], S: number, T: number, iv = 0.28): number {
-  return legs.reduce((acc, l) => {
-    const v = blackScholes(S, l.k, T, 0.045, iv, l.t);
-    const mult = (l.s === "long" ? 1 : -1) * (l.q || 1);
-    return acc + (v - l.p) * mult * 100;
-  }, 0);
+function analyzePositionStructure(position: PortfolioPosition) {
+  const basePrice = referencePrice(position);
+  const strategyLegs = toStrategyLegs(position.legs, position.stockLeg);
+  const payoff = generatePayoffAtExpiry(strategyLegs, basePrice);
+  const zeroBoundary = {
+    underlyingPrice: 0,
+    ...calculateStrategyProfitLossAtExpiry(strategyLegs, 0),
+  };
+  const payoffWithFloor = [...payoff, zeroBoundary].sort(
+    (a, b) => a.underlyingPrice - b.underlyingPrice,
+  );
+  const breakEvens = findBreakEvenPoints(payoffWithFloor);
+  const limits = calculateMaxProfitLoss(payoffWithFloor);
+
+  return {
+    basePrice,
+    strategyLegs,
+    payoff: payoffWithFloor,
+    breakEvens,
+    limits,
+  };
+}
+
+export function payoffAtExpiry(
+  legs: PortfolioLeg[],
+  S: number,
+  stockLeg: PositionStockLeg | null = null,
+): number {
+  return calculateStrategyProfitLossAtExpiry(toStrategyLegs(legs, stockLeg), S).profitLoss;
+}
+
+export function mtm(
+  legs: PortfolioLeg[],
+  S: number,
+  stockLeg: PositionStockLeg | null = null,
+  now: Date = new Date(),
+  r = 0.045,
+): number {
+  return calculateStrategyProfitLossAtDate(toStrategyLegs(legs, stockLeg), S, {
+    daysForward: 0,
+    riskFreeRate: r,
+    now,
+  }).profitLoss;
 }
 
 export function markLeg(
-  l: PortfolioLeg,
+  leg: PortfolioLeg,
   S: number,
   now: Date = new Date(),
   r = 0.045,
 ): LegMark {
-  const expMs = new Date(l.exp).getTime();
-  const dte = Math.max(
-    0,
-    Math.round((expMs - now.getTime()) / 86_400_000),
-  );
-  const T = Math.max(dte / 365, 1 / 365);
-  const iv = l.iv && l.iv > 0 ? l.iv : 0.28;
-  const value = blackScholes(S, l.k, T, r, iv, l.t);
-  const sign = l.s === "long" ? 1 : -1;
-  const mult = sign * l.q * 100;
-
-  const sqrtT = Math.sqrt(T);
-  const d1 = (Math.log(S / l.k) + (r + (iv * iv) / 2) * T) / (iv * sqrtT);
-  const d2 = d1 - iv * sqrtT;
-  const pdf = normalPdf(d1);
-  const deltaShare =
-    l.t === "call" ? cumulativeNormal(d1) : cumulativeNormal(d1) - 1;
-  const gammaShare = pdf / (S * iv * sqrtT);
-  const thetaYear =
-    l.t === "call"
-      ? -(S * pdf * iv) / (2 * sqrtT) -
-        r * l.k * Math.exp(-r * T) * cumulativeNormal(d2)
-      : -(S * pdf * iv) / (2 * sqrtT) +
-        r * l.k * Math.exp(-r * T) * cumulativeNormal(-d2);
-  const vegaShare = S * pdf * sqrtT;
+  const input = pricingInputForLeg(leg, S, now, r);
+  const dte = Math.max(0, Math.ceil(input.timeToExpiry * 365));
+  const value = blackScholesPrice(input);
+  const greeks = calculateGreeks(input);
+  const mult = (leg.s === "long" ? 1 : -1) * leg.q * 100;
 
   return {
     dte,
     value,
-    pnl: (value - l.p) * mult,
-    delta: deltaShare * mult,
-    gamma: gammaShare * mult,
-    theta: (thetaYear / 365) * mult,
-    vega: (vegaShare / 100) * mult,
+    pnl: (value - leg.p) * mult,
+    delta: greeks.delta * mult,
+    gamma: greeks.gamma * mult,
+    theta: greeks.theta * mult,
+    vega: greeks.vega * mult,
   };
 }
 
@@ -116,20 +172,28 @@ export interface PositionMark {
 export function markPosition(
   legs: PortfolioLeg[],
   S: number,
+  stockLeg: PositionStockLeg | null = null,
   now: Date = new Date(),
   r = 0.045,
 ): PositionMark {
-  const marks = legs.map((l) => markLeg(l, S, now, r));
+  const marks = legs.map((leg) => markLeg(leg, S, now, r));
   const acc = marks.reduce(
-    (a, m) => ({
-      pnl: a.pnl + m.pnl,
-      delta: a.delta + m.delta,
-      gamma: a.gamma + m.gamma,
-      theta: a.theta + m.theta,
-      vega: a.vega + m.vega,
+    (sum, mark) => ({
+      pnl: sum.pnl + mark.pnl,
+      delta: sum.delta + mark.delta,
+      gamma: sum.gamma + mark.gamma,
+      theta: sum.theta + mark.theta,
+      vega: sum.vega + mark.vega,
     }),
     { pnl: 0, delta: 0, gamma: 0, theta: 0, vega: 0 },
   );
+
+  if (stockLeg) {
+    const stockDelta = (stockLeg.side === "long" ? 1 : -1) * stockLeg.quantity;
+    acc.pnl += stockProfitLoss(stockLeg, S);
+    acc.delta += stockDelta;
+  }
+
   return { marks, ...acc };
 }
 
@@ -153,17 +217,57 @@ export function applyScenario(
   if (rule && rule.mode === "pct") newPx = pos.px * (1 + rule.val / 100);
   else if (rule && rule.mode === "abs") newPx = rule.val;
 
-  const ivMult = scn.iv_shock?.mode === "mult" ? scn.iv_shock.val : 1;
-  const iv = 0.28 * ivMult;
+  const now = Date.now();
+  const advanceMs = (scn.advance_days ?? 0) * 86_400_000;
+  const r = scn.interest_rate ?? 0.045;
+  const shock = scn.iv_shock;
 
-  const daysLeft = Math.max(0, pos.dte - (scn.advance_days ?? 0));
-  const T = Math.max(daysLeft / 365, 1 / 365);
-  const newValue = mtm(pos.legs, newPx, T, iv);
+  let newValue = 0;
+  for (const leg of pos.legs) {
+    const expMs = new Date(`${leg.exp}T23:59:59.999Z`).getTime();
+    const daysLeft = Number.isFinite(expMs)
+      ? (expMs - now - advanceMs) / 86_400_000
+      : 0;
+
+    const baseIv = leg.iv && leg.iv > 0 ? leg.iv : 0.28;
+    let legIv = baseIv;
+    if (shock) {
+      if (shock.mode === "mult") legIv = baseIv * shock.val;
+      else if (shock.mode === "add") legIv = baseIv + shock.val / 100;
+      else if (shock.mode === "abs") legIv = shock.val;
+    }
+    legIv = Math.max(0.01, legIv);
+
+    let value: number;
+    if (daysLeft <= 0) {
+      value =
+        leg.t === "call"
+          ? Math.max(newPx - leg.k, 0)
+          : Math.max(leg.k - newPx, 0);
+    } else {
+      value = blackScholesPrice({
+        spotPrice: newPx,
+        strikePrice: leg.k,
+        timeToExpiry: daysLeft / 365,
+        riskFreeRate: r,
+        volatility: legIv,
+        optionType: leg.t,
+      });
+    }
+
+    const sign = leg.s === "long" ? 1 : -1;
+    newValue += (value - leg.p) * sign * leg.q * 100;
+  }
+
+  if (pos.stockLeg) {
+    newValue += stockProfitLoss(pos.stockLeg, newPx);
+  }
+
   return { newPx, newValue, delta: newValue - pos.pnl };
 }
 
 export function fmtDollar(n: number): string {
-  const sign = n >= 0 ? "+" : "−";
+  const sign = n >= 0 ? "+" : "-";
   return sign + "$" + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
@@ -190,41 +294,58 @@ export function heatTextColor(value: number, maxAbs: number): string {
   return t > 0.25 ? "white" : "#1f2937";
 }
 
-export function maxProfitLabel(p: PortfolioPosition): string {
-  const net = p.net;
-  if (p.strat === "iron-condor" || p.strat === "bull-put" || p.strat === "bear-call") {
-    return "+$" + Math.abs(net);
-  }
-  if (
-    p.strat === "long-call" ||
-    p.strat === "long-straddle" ||
-    p.strat === "short-call" ||
-    p.strat === "short-put"
-  ) {
-    return "Unlimited";
-  }
-  return "+$" + Math.abs(p.cost);
+export function maxProfitLabel(position: PortfolioPosition): string {
+  const { limits } = analyzePositionStructure(position);
+  if (limits.isUnlimitedProfit) return "Unlimited";
+  return "+$" + Math.abs(Math.round(limits.maxProfit)).toLocaleString("en-US");
 }
 
-export function maxLossLabel(p: PortfolioPosition): string {
-  if (p.strat === "iron-condor") return "−$" + p.cost;
-  if (p.strat === "strangle" || p.strat === "short-straddle") return "Unlimited";
-  return "−$" + p.cost;
+export function maxLossLabel(position: PortfolioPosition): string {
+  const { limits } = analyzePositionStructure(position);
+  if (limits.isUnlimitedLoss) return "Unlimited";
+  return "-$" + Math.abs(Math.round(limits.maxLoss)).toLocaleString("en-US");
 }
 
-export function breakevenLabel(p: PortfolioPosition): string {
-  if (!p.px || p.legs.length === 0) return "—";
-  if (p.strat === "iron-condor")
-    return "$" + (p.px - 6).toFixed(2) + " · $" + (p.px + 6).toFixed(2);
-  if (p.strat === "long-call")
-    return "$" + (p.legs[0].k + p.legs[0].p).toFixed(2);
-  if (p.strat === "long-straddle")
-    return "$" + (p.px - 20).toFixed(2) + " · $" + (p.px + 20).toFixed(2);
-  return "$" + p.px.toFixed(2);
+export function breakevenLabel(position: PortfolioPosition): string {
+  const { breakEvens } = analyzePositionStructure(position);
+  if (breakEvens.length === 0) return "—";
+  return breakEvens.map((value) => `$${value.toFixed(2)}`).join(" · ");
 }
 
-export function popLabel(p: PortfolioPosition): string {
-  const pops = [64, 38, 72, 54, 71, 73, 42, 60];
-  const seed = p.id.length > 1 ? p.id.charCodeAt(1) : 0;
-  return pops[Math.abs(seed) % 8] + "%";
+export function popLabel(position: PortfolioPosition): string {
+  if (position.legs.length === 0) return "—";
+
+  const { basePrice, payoff, breakEvens } = analyzePositionStructure(position);
+  const weighted = position.legs.reduce(
+    (sum, leg) => {
+      const iv = leg.iv && leg.iv > 0 ? leg.iv : 0.28;
+      return {
+        iv: sum.iv + iv * leg.q,
+        qty: sum.qty + leg.q,
+      };
+    },
+    { iv: 0, qty: 0 },
+  );
+  const avgIv = weighted.qty > 0 ? weighted.iv / weighted.qty : 0.28;
+  const dte = maxDaysToExpiry(position);
+  if (dte <= 0) return "—";
+
+  const probability = calculateChanceOfProfit(
+    payoff,
+    breakEvens,
+    basePrice,
+    avgIv,
+    dte / 365,
+    0.045,
+  );
+
+  return `${(probability * 100).toFixed(0)}%`;
+}
+
+export function fallbackCostBasis(
+  legs: PortfolioLeg[],
+  stockLeg: PositionStockLeg | null,
+  currentPrice: number,
+): number {
+  return calculateRiskCapital(toStrategyLegs(legs, stockLeg), currentPrice);
 }
