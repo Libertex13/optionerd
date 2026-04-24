@@ -123,6 +123,10 @@ function maxDaysToExpiry(position: PortfolioPosition, now: Date = new Date()): n
   }, 0);
 }
 
+function hasMixedExpiries(position: PortfolioPosition): boolean {
+  return new Set(position.legs.map((leg) => leg.exp)).size > 1;
+}
+
 function analyzePositionStructure(position: PortfolioPosition) {
   const basePrice = referencePrice(position);
   const strategyLegs = toStrategyLegs(position.legs, position.stockLeg);
@@ -298,18 +302,21 @@ export function heatTextColor(value: number, maxAbs: number): string {
 }
 
 export function maxProfitLabel(position: PortfolioPosition): string {
+  if (hasMixedExpiries(position)) return "Varies by date";
   const { limits } = analyzePositionStructure(position);
   if (limits.isUnlimitedProfit) return "Unlimited";
   return "+$" + Math.abs(Math.round(limits.maxProfit)).toLocaleString("en-US");
 }
 
 export function maxLossLabel(position: PortfolioPosition): string {
+  if (hasMixedExpiries(position)) return "Varies by date";
   const { limits } = analyzePositionStructure(position);
   if (limits.isUnlimitedLoss) return "Unlimited";
   return "-$" + Math.abs(Math.round(limits.maxLoss)).toLocaleString("en-US");
 }
 
 export function breakevenLabel(position: PortfolioPosition): string {
+  if (hasMixedExpiries(position)) return "Front expiry only";
   const { breakEvens } = analyzePositionStructure(position);
   if (breakEvens.length === 0) return "—";
   return breakEvens.map((value) => `$${value.toFixed(2)}`).join(" · ");
@@ -317,6 +324,7 @@ export function breakevenLabel(position: PortfolioPosition): string {
 
 export function popLabel(position: PortfolioPosition): string {
   if (position.legs.length === 0) return "—";
+  if (hasMixedExpiries(position)) return "Varies by path";
 
   const { basePrice, payoff, breakEvens } = analyzePositionStructure(position);
   const weighted = position.legs.reduce(

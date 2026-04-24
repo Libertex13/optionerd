@@ -300,6 +300,54 @@ describe("portfolio/pricing", () => {
     expect(atTargetDate.newValue).toBeLessThan(samePriceToday.newValue);
   });
 
+  it("downgrades mixed-expiry portfolio labels to conditional text", () => {
+    const position: PortfolioPosition = {
+      id: "pos-10",
+      state: "open",
+      name: "Call calendar",
+      strat: "call-calendar",
+      ticker: "AAPL",
+      px: 100,
+      pxLive: true,
+      markSource: "chain",
+      legs: [
+        {
+          s: "short",
+          t: "call",
+          k: 100,
+          p: 4,
+          q: 1,
+          iv: 0.22,
+          exp: "2026-05-15",
+        },
+        {
+          s: "long",
+          t: "call",
+          k: 100,
+          p: 6,
+          q: 1,
+          iv: 0.24,
+          exp: "2026-06-19",
+        },
+      ],
+      stockLeg: null,
+      net: -200,
+      dte: 21,
+      dteMax: 56,
+      cost: 200,
+      pnl: 0,
+      pnlPct: 0,
+      entry: "2026-04-24",
+      marks: [],
+      greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 },
+    };
+
+    expect(maxProfitLabel(position)).toBe("Varies by date");
+    expect(maxLossLabel(position)).toBe("Varies by date");
+    expect(breakevenLabel(position)).toBe("Front expiry only");
+    expect(popLabel(position)).toBe("Varies by path");
+  });
+
   it("treats target_date on the current UTC day the same as zero days forward", () => {
     const position: PortfolioPosition = {
       id: "pos-5",
