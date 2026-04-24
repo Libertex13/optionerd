@@ -17,6 +17,10 @@ function probabilityAbove(
 ): number {
   if (timeToExpiry <= 0) return spotPrice > targetPrice ? 1 : 0;
   if (targetPrice <= 0) return 1;
+  if (volatility <= 0) {
+    const forwardPrice = spotPrice * Math.exp(riskFreeRate * timeToExpiry);
+    return forwardPrice > targetPrice ? 1 : 0;
+  }
 
   const sqrtT = Math.sqrt(timeToExpiry);
   const d2 =
@@ -38,6 +42,17 @@ function probabilityBelow(
   riskFreeRate: number,
 ): number {
   return 1 - probabilityAbove(spotPrice, targetPrice, volatility, timeToExpiry, riskFreeRate);
+}
+
+function profitAtSpot(
+  payoffPoints: PayoffPoint[],
+  spotPrice: number,
+): number {
+  return payoffPoints.reduce((best, point) =>
+    Math.abs(point.underlyingPrice - spotPrice) < Math.abs(best.underlyingPrice - spotPrice)
+      ? point
+      : best
+  ).profitLoss;
 }
 
 /**
@@ -63,7 +78,7 @@ export function calculateChanceOfProfit(
   riskFreeRate: number,
 ): number {
   if (payoffPoints.length === 0) return 0;
-  if (timeToExpiry <= 0) return 0;
+  if (timeToExpiry <= 0) return profitAtSpot(payoffPoints, spotPrice) > 0 ? 1 : 0;
 
   // No break-even points: either always profitable or always losing
   if (breakEvenPoints.length === 0) {
