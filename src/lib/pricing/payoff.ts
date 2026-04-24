@@ -8,35 +8,64 @@ import {
   DEFAULT_RISK_FREE_RATE,
 } from "@/lib/utils/constants";
 
+export interface PayoffAtDateOptions {
+  daysForward?: number;
+  riskFreeRate?: number;
+  now?: Date;
+}
+
+function expirationEndDate(expirationDate: string): Date {
+  return new Date(`${expirationDate}T23:59:59.999Z`);
+}
+
+export function calculateTimeToExpiryYears(
+  expirationDate: string,
+  daysForward = 0,
+  now: Date = new Date(),
+): number {
+  const expiryTime = expirationEndDate(expirationDate).getTime();
+  if (!Number.isFinite(expiryTime)) {
+    return 0;
+  }
+
+  const valuationTime = now.getTime() + daysForward * 86_400_000;
+  return Math.max((expiryTime - valuationTime) / 86_400_000 / 365, 0);
+}
+
 /**
  * Calculate P&L for a single option leg at expiration.
  */
-function optionLegPayoffAtExpiry(leg: OptionLeg, underlyingPrice: number): number {
+export function calculateOptionLegProfitLossAtExpiry(
+  leg: OptionLeg,
+  underlyingPrice: number,
+): number {
   const multiplier = leg.positionType === "long" ? 1 : -1;
-  let intrinsicValue: number;
+  const intrinsicValue =
+    leg.optionType === "call"
+      ? Math.max(underlyingPrice - leg.strikePrice, 0)
+      : Math.max(leg.strikePrice - underlyingPrice, 0);
 
-  if (leg.optionType === "call") {
-    intrinsicValue = Math.max(underlyingPrice - leg.strikePrice, 0);
-  } else {
-    intrinsicValue = Math.max(leg.strikePrice - underlyingPrice, 0);
-  }
-
-  // P&L = (intrinsic value - premium paid) * quantity * multiplier
-  // For long: pay premium, receive intrinsic
-  // For short: receive premium, pay intrinsic
   return (intrinsicValue * multiplier - leg.premium * multiplier) * leg.quantity * 100;
 }
 
 /**
- * Calculate P&L for a single option leg at a future date (before expiry) using Black-Scholes.
+ * Calculate P&L for a single option leg at a future date (before expiry).
  */
-function optionLegPayoffAtDate(
+export function calculateOptionLegProfitLossAtDate(
   leg: OptionLeg,
   underlyingPrice: number,
-  timeToExpiry: number,
-  riskFreeRate: number
+  {
+    daysForward = 0,
+    riskFreeRate = DEFAULT_RISK_FREE_RATE,
+    now = new Date(),
+  }: PayoffAtDateOptions = {},
 ): number {
   const multiplier = leg.positionType === "long" ? 1 : -1;
+  const timeToExpiry = calculateTimeToExpiryYears(leg.expirationDate, daysForward, now);
+
+  if (timeToExpiry <= 0) {
+    return calculateOptionLegProfitLossAtExpiry(leg, underlyingPrice);
+  }
 
   const theoreticalPrice = blackScholesPrice({
     spotPrice: underlyingPrice,
@@ -53,12 +82,82 @@ function optionLegPayoffAtDate(
 /**
  * Calculate P&L for a stock leg.
  */
-function stockLegPayoff(
+export function calculateStockLegProfitLoss(
   leg: { positionType: "long" | "short"; quantity: number; entryPrice: number },
-  underlyingPrice: number
+  underlyingPrice: number,
 ): number {
   const multiplier = leg.positionType === "long" ? 1 : -1;
   return (underlyingPrice - leg.entryPrice) * multiplier * leg.quantity;
+}
+
+export function calculateStrategyProfitLossAtExpiry(
+  legs: StrategyLeg[],
+  underlyingPrice: number,
+): { profitLoss: number; legProfitLoss: number[] } {
+  const legProfitLoss = legs.map((leg) =>
+    isOptionLeg(leg)
+      ? calculateOptionLegProfitLossAtExpiry(leg, underlyingPrice)
+      : calculateStockLegProfitLoss(leg, underlyingPrice),
+  );
+
+  return {
+    profitLoss: Math.round(legProfitLoss.reduce((sum, legPL) => sum + legPL, 0) * 100) / 100,
+    legProfitLoss,
+  };
+}
+
+export function calculateStrategyProfitLossAtDate(
+  legs: StrategyLeg[],
+  underlyingPrice: number,
+  options: PayoffAtDateOptions = {},
+): { profitLoss: number; legProfitLoss: number[] } {
+  const legProfitLoss = legs.map((leg) =>
+    isOptionLeg(leg)
+      ? calculateOptionLegProfitLossAtDate(leg, underlyingPrice, options)
+      : calculateStockLegProfitLoss(leg, underlyingPrice),
+  );
+
+  return {
+    profitLoss: Math.round(legProfitLoss.reduce((sum, legPL) => sum + legPL, 0) * 100) / 100,
+    legProfitLoss,
+  };
+}
+
+function netCashFlowAtEntry(legs: StrategyLeg[]): number {
+  return legs.reduce((sum, leg) => {
+    if (isOptionLeg(leg)) {
+      const sign = leg.positionType === "long" ? -1 : 1;
+      return sum + sign * leg.premium * leg.quantity * 100;
+    }
+
+    const sign = leg.positionType === "long" ? -1 : 1;
+    return sum + sign * leg.entryPrice * leg.quantity;
+  }, 0);
+}
+
+export function calculateRiskCapital(
+  legs: StrategyLeg[],
+  currentPrice: number,
+): number {
+  if (legs.length === 0) {
+    return 0;
+  }
+
+  const payoff = generatePayoffAtExpiry(legs, currentPrice);
+  const zeroBoundary = {
+    underlyingPrice: 0,
+    ...calculateStrategyProfitLossAtExpiry(legs, 0),
+  };
+  const { maxLoss, isUnlimitedLoss } = calculateMaxProfitLoss(payoff);
+  const floorAdjustedLoss = Math.min(
+    maxLoss,
+    zeroBoundary.profitLoss,
+  );
+  if (!isUnlimitedLoss && Number.isFinite(maxLoss)) {
+    return Math.abs(floorAdjustedLoss);
+  }
+
+  return Math.abs(netCashFlowAtEntry(legs));
 }
 
 /**
@@ -66,7 +165,7 @@ function stockLegPayoff(
  */
 export function generatePayoffAtExpiry(
   legs: StrategyLeg[],
-  currentPrice: number
+  currentPrice: number,
 ): PayoffPoint[] {
   const lowPrice = currentPrice * PAYOFF_RANGE_LOW_PCT;
   const highPrice = currentPrice * PAYOFF_RANGE_HIGH_PCT;
@@ -76,24 +175,12 @@ export function generatePayoffAtExpiry(
 
   for (let i = 0; i <= PAYOFF_PRICE_POINTS; i++) {
     const price = lowPrice + step * i;
-    const legProfitLoss: number[] = [];
-    let totalPL = 0;
-
-    for (const leg of legs) {
-      let legPL: number;
-      if (isOptionLeg(leg)) {
-        legPL = optionLegPayoffAtExpiry(leg, price);
-      } else {
-        legPL = stockLegPayoff(leg, price);
-      }
-      legProfitLoss.push(legPL);
-      totalPL += legPL;
-    }
+    const result = calculateStrategyProfitLossAtExpiry(legs, price);
 
     points.push({
       underlyingPrice: Math.round(price * 100) / 100,
-      profitLoss: Math.round(totalPL * 100) / 100,
-      legProfitLoss,
+      profitLoss: result.profitLoss,
+      legProfitLoss: result.legProfitLoss,
     });
   }
 
@@ -106,8 +193,9 @@ export function generatePayoffAtExpiry(
 export function generatePayoffAtDate(
   legs: StrategyLeg[],
   currentPrice: number,
-  timeToExpiry: number,
-  riskFreeRate: number = DEFAULT_RISK_FREE_RATE
+  daysForward: number,
+  riskFreeRate: number = DEFAULT_RISK_FREE_RATE,
+  now: Date = new Date(),
 ): PayoffPoint[] {
   const lowPrice = currentPrice * PAYOFF_RANGE_LOW_PCT;
   const highPrice = currentPrice * PAYOFF_RANGE_HIGH_PCT;
@@ -117,24 +205,16 @@ export function generatePayoffAtDate(
 
   for (let i = 0; i <= PAYOFF_PRICE_POINTS; i++) {
     const price = lowPrice + step * i;
-    const legProfitLoss: number[] = [];
-    let totalPL = 0;
-
-    for (const leg of legs) {
-      let legPL: number;
-      if (isOptionLeg(leg)) {
-        legPL = optionLegPayoffAtDate(leg, price, timeToExpiry, riskFreeRate);
-      } else {
-        legPL = stockLegPayoff(leg, price);
-      }
-      legProfitLoss.push(legPL);
-      totalPL += legPL;
-    }
+    const result = calculateStrategyProfitLossAtDate(legs, price, {
+      daysForward,
+      riskFreeRate,
+      now,
+    });
 
     points.push({
       underlyingPrice: Math.round(price * 100) / 100,
-      profitLoss: Math.round(totalPL * 100) / 100,
-      legProfitLoss,
+      profitLoss: result.profitLoss,
+      legProfitLoss: result.legProfitLoss,
     });
   }
 
@@ -155,9 +235,10 @@ export function findBreakEvenPoints(payoffPoints: PayoffPoint[]): number[] {
       (prev.profitLoss <= 0 && curr.profitLoss > 0) ||
       (prev.profitLoss >= 0 && curr.profitLoss < 0)
     ) {
-      // Linear interpolation
-      const ratio = Math.abs(prev.profitLoss) / (Math.abs(prev.profitLoss) + Math.abs(curr.profitLoss));
-      const breakEvenPrice = prev.underlyingPrice + ratio * (curr.underlyingPrice - prev.underlyingPrice);
+      const ratio =
+        Math.abs(prev.profitLoss) / (Math.abs(prev.profitLoss) + Math.abs(curr.profitLoss));
+      const breakEvenPrice =
+        prev.underlyingPrice + ratio * (curr.underlyingPrice - prev.underlyingPrice);
       breakEvens.push(Math.round(breakEvenPrice * 100) / 100);
     }
   }
@@ -192,25 +273,25 @@ export function calculateMaxProfitLoss(payoffPoints: PayoffPoint[]): {
     }
   }
 
-  // Detect unbounded profit/loss: if P&L is still increasing (or decreasing)
-  // at the edges of the simulated range, the position is theoretically unlimited.
-  // Only the UPPER end (price → ∞) can be truly unlimited. The lower end
-  // (price → $0) is always bounded because stock can't go negative, so losses
-  // deepening toward $0 (e.g., covered call, long stock) are large but finite.
   const n = payoffPoints.length;
   const isUnlimitedProfit =
     n >= 3 &&
-    // Profit still increasing at upper end (e.g., long call, long stock)
     payoffPoints[n - 1].profitLoss > payoffPoints[n - 2].profitLoss &&
     payoffPoints[n - 2].profitLoss > payoffPoints[n - 3].profitLoss &&
     payoffPoints[n - 1].profitLoss > 0;
 
   const isUnlimitedLoss =
     n >= 3 &&
-    // Loss still deepening at upper end (e.g., naked short call)
     payoffPoints[n - 1].profitLoss < payoffPoints[n - 2].profitLoss &&
     payoffPoints[n - 2].profitLoss < payoffPoints[n - 3].profitLoss &&
     payoffPoints[n - 1].profitLoss < 0;
 
-  return { maxProfit, maxLoss, maxProfitPrice, maxLossPrice, isUnlimitedProfit, isUnlimitedLoss };
+  return {
+    maxProfit,
+    maxLoss,
+    maxProfitPrice,
+    maxLossPrice,
+    isUnlimitedProfit,
+    isUnlimitedLoss,
+  };
 }

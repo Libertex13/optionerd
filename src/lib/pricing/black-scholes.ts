@@ -1,14 +1,7 @@
 import type { OptionPricingInput, PricingResult } from "@/types/options";
 import { calculateGreeks } from "./greeks";
 
-/**
- * Cumulative standard normal distribution using the rational approximation
- * from Abramowitz & Stegun (formula 26.2.17). Accuracy: |error| < 7.5e-8.
- */
-export function cumulativeNormalDistribution(x: number): number {
-  if (x < -10) return 0;
-  if (x > 10) return 1;
-
+function erfApprox(x: number): number {
   const a1 = 0.254829592;
   const a2 = -0.284496736;
   const a3 = 1.421413741;
@@ -27,9 +20,20 @@ export function cumulativeNormalDistribution(x: number): number {
   const y =
     1.0 -
     (a1 * t + a2 * t2 + a3 * t3 + a4 * t4 + a5 * t5) *
-      Math.exp(-0.5 * absX * absX);
+      Math.exp(-absX * absX);
 
-  return 0.5 * (1.0 + sign * y);
+  return sign * y;
+}
+
+/**
+ * Cumulative standard normal distribution using the rational approximation
+ * from Abramowitz & Stegun (formula 26.2.17). Accuracy: |error| < 7.5e-8.
+ */
+export function cumulativeNormalDistribution(x: number): number {
+  if (x < -10) return 0;
+  if (x > 10) return 1;
+
+  return 0.5 * (1.0 + erfApprox(x / Math.SQRT2));
 }
 
 /**
@@ -47,8 +51,12 @@ export function calculateD1D2(
   strikePrice: number,
   timeToExpiry: number,
   riskFreeRate: number,
-  volatility: number
+  volatility: number,
 ): { d1: number; d2: number } {
+  if (spotPrice <= 0 || strikePrice <= 0 || timeToExpiry <= 0 || volatility <= 0) {
+    return { d1: 0, d2: 0 };
+  }
+
   const sqrtT = Math.sqrt(timeToExpiry);
   const d1 =
     (Math.log(spotPrice / strikePrice) +
@@ -62,17 +70,39 @@ export function calculateD1D2(
  * Black-Scholes option pricing for European options.
  */
 export function blackScholesPrice(input: OptionPricingInput): number {
-  const { spotPrice, strikePrice, timeToExpiry, riskFreeRate, volatility, optionType } = input;
+  const {
+    spotPrice,
+    strikePrice,
+    timeToExpiry,
+    riskFreeRate,
+    volatility,
+    optionType,
+  } = input;
 
-  if (timeToExpiry <= 0) {
-    // At expiration — intrinsic value
-    if (optionType === "call") {
-      return Math.max(spotPrice - strikePrice, 0);
-    }
-    return Math.max(strikePrice - spotPrice, 0);
+  if (spotPrice <= 0 || strikePrice <= 0) {
+    return 0;
   }
 
-  const { d1, d2 } = calculateD1D2(spotPrice, strikePrice, timeToExpiry, riskFreeRate, volatility);
+  if (timeToExpiry <= 0) {
+    return optionType === "call"
+      ? Math.max(spotPrice - strikePrice, 0)
+      : Math.max(strikePrice - spotPrice, 0);
+  }
+
+  if (volatility <= 0) {
+    const discountedStrike = strikePrice * Math.exp(-riskFreeRate * timeToExpiry);
+    return optionType === "call"
+      ? Math.max(spotPrice - discountedStrike, 0)
+      : Math.max(discountedStrike - spotPrice, 0);
+  }
+
+  const { d1, d2 } = calculateD1D2(
+    spotPrice,
+    strikePrice,
+    timeToExpiry,
+    riskFreeRate,
+    volatility,
+  );
   const discountFactor = Math.exp(-riskFreeRate * timeToExpiry);
 
   if (optionType === "call") {
@@ -82,7 +112,6 @@ export function blackScholesPrice(input: OptionPricingInput): number {
     );
   }
 
-  // Put
   return (
     strikePrice * discountFactor * cumulativeNormalDistribution(-d2) -
     spotPrice * cumulativeNormalDistribution(-d1)

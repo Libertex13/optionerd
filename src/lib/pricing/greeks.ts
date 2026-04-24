@@ -14,10 +14,27 @@ import { CALENDAR_DAYS_PER_YEAR } from "@/lib/utils/constants";
 export function calculateGreeks(input: OptionPricingInput): Greeks {
   const { spotPrice, strikePrice, timeToExpiry, riskFreeRate, volatility, optionType } = input;
 
+  if (spotPrice <= 0 || strikePrice <= 0) {
+    return { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  }
+
   if (timeToExpiry <= 0) {
     // At expiration, Greeks are essentially zero (or undefined)
     const intrinsicCall = spotPrice > strikePrice;
     const intrinsicPut = spotPrice < strikePrice;
+    return {
+      delta: optionType === "call" ? (intrinsicCall ? 1 : 0) : (intrinsicPut ? -1 : 0),
+      gamma: 0,
+      theta: 0,
+      vega: 0,
+      rho: 0,
+    };
+  }
+
+  if (volatility <= 0) {
+    const discountedStrike = strikePrice * Math.exp(-riskFreeRate * timeToExpiry);
+    const intrinsicCall = spotPrice > discountedStrike;
+    const intrinsicPut = spotPrice < discountedStrike;
     return {
       delta: optionType === "call" ? (intrinsicCall ? 1 : 0) : (intrinsicPut ? -1 : 0),
       gamma: 0,

@@ -2,9 +2,11 @@
 
 import { useState, useMemo } from "react";
 import type { StrategyLeg } from "@/types/options";
-import { isOptionLeg } from "@/types/options";
-import { blackScholesPrice } from "@/lib/pricing/black-scholes";
-import { DEFAULT_RISK_FREE_RATE, CALENDAR_DAYS_PER_YEAR } from "@/lib/utils/constants";
+import {
+  calculateRiskCapital,
+  calculateStrategyProfitLossAtDate,
+} from "@/lib/pricing/payoff";
+import { DEFAULT_RISK_FREE_RATE } from "@/lib/utils/constants";
 
 type DisplayMode = "$" | "%";
 
@@ -68,56 +70,23 @@ function generatePriceRows(currentPrice: number): number[] {
  * For credit positions: margin requirement approximation (we use the net credit as the basis).
  * For stock legs: shares * entry price.
  */
-function calculateCostBasis(legs: StrategyLeg[]): number {
-  let totalDebit = 0;
-
-  for (const leg of legs) {
-    if (isOptionLeg(leg)) {
-      const multiplier = leg.positionType === "long" ? 1 : -1;
-      totalDebit += leg.premium * multiplier * leg.quantity * 100;
-    } else {
-      const multiplier = leg.positionType === "long" ? 1 : -1;
-      totalDebit += leg.entryPrice * multiplier * leg.quantity;
-    }
-  }
-
-  return Math.abs(totalDebit);
+function calculateCostBasis(legs: StrategyLeg[], currentPrice: number): number {
+  return calculateRiskCapital(legs, currentPrice);
 }
 
 /**
  * Calculate total P&L for a set of legs at a given underlying price and DTE.
  */
-function calculatePnL(legs: StrategyLeg[], underlyingPrice: number, dte: number): number {
-  let totalPnl = 0;
-
-  for (const leg of legs) {
-    if (isOptionLeg(leg)) {
-      const multiplier = leg.positionType === "long" ? 1 : -1;
-
-      if (dte <= 0) {
-        const intrinsic = leg.optionType === "call"
-          ? Math.max(underlyingPrice - leg.strikePrice, 0)
-          : Math.max(leg.strikePrice - underlyingPrice, 0);
-        totalPnl += (intrinsic * multiplier - leg.premium * multiplier) * leg.quantity * 100;
-      } else {
-        const timeToExpiry = dte / CALENDAR_DAYS_PER_YEAR;
-        const theoreticalPrice = blackScholesPrice({
-          spotPrice: underlyingPrice,
-          strikePrice: leg.strikePrice,
-          timeToExpiry,
-          riskFreeRate: DEFAULT_RISK_FREE_RATE,
-          volatility: leg.impliedVolatility,
-          optionType: leg.optionType,
-        });
-        totalPnl += (theoreticalPrice - leg.premium) * multiplier * leg.quantity * 100;
-      }
-    } else {
-      const multiplier = leg.positionType === "long" ? 1 : -1;
-      totalPnl += (underlyingPrice - leg.entryPrice) * multiplier * leg.quantity;
-    }
-  }
-
-  return Math.round(totalPnl * 100) / 100;
+function calculatePnL(
+  legs: StrategyLeg[],
+  underlyingPrice: number,
+  dte: number,
+  maxDte: number,
+): number {
+  return calculateStrategyProfitLossAtDate(legs, underlyingPrice, {
+    daysForward: Math.max(maxDte - dte, 0),
+    riskFreeRate: DEFAULT_RISK_FREE_RATE,
+  }).profitLoss;
 }
 
 /**
@@ -175,7 +144,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
   const { dateColumns, priceRows, grid, costBasis, maxAbsDollar, maxAbsPct } = useMemo(() => {
     const dateCols = generateDateColumns(daysToExpiry);
     const prices = generatePriceRows(currentPrice);
-    const basis = calculateCostBasis(legs);
+    const basis = calculateCostBasis(legs, currentPrice);
 
     let maxDollar = 0;
     let maxPct = 0;
@@ -184,7 +153,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
     for (const price of prices) {
       const row: { pnl: number; pct: number }[] = [];
       for (const col of dateCols) {
-        const pnl = calculatePnL(legs, price, col.dte);
+        const pnl = calculatePnL(legs, price, col.dte, daysToExpiry);
         const pct = basis > 0 ? (pnl / basis) * 100 : 0;
         row.push({ pnl, pct });
         if (Math.abs(pnl) > maxDollar) maxDollar = Math.abs(pnl);

@@ -20,7 +20,6 @@ import {
   findBreakEvenPoints,
 } from "@/lib/pricing/payoff";
 import {
-  CALENDAR_DAYS_PER_YEAR,
   DEFAULT_RISK_FREE_RATE,
 } from "@/lib/utils/constants";
 import { formatCurrency } from "@/lib/utils/formatting";
@@ -93,19 +92,15 @@ export function TimeSlider({
   const { expiryData, datedData, todayData, breakEvens, stats } =
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useMemo(() => {
-      const dteRemaining = Math.max(daysToExpiry - dayElapsed, 0);
-      const T = Math.max(dteRemaining / CALENDAR_DAYS_PER_YEAR, 1 / CALENDAR_DAYS_PER_YEAR);
-      const T0 = Math.max(daysToExpiry / CALENDAR_DAYS_PER_YEAR, 1 / CALENDAR_DAYS_PER_YEAR);
-
       const expiryPoints = generatePayoffAtExpiry(legs, currentPrice);
       const datedPoints =
         dayElapsed >= daysToExpiry
           ? expiryPoints
-          : generatePayoffAtDate(legs, currentPrice, T, DEFAULT_RISK_FREE_RATE);
+          : generatePayoffAtDate(legs, currentPrice, dayElapsed, DEFAULT_RISK_FREE_RATE);
       const todayPoints = generatePayoffAtDate(
         legs,
         currentPrice,
-        T0,
+        0,
         DEFAULT_RISK_FREE_RATE,
       );
 

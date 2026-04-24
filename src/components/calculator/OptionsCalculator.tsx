@@ -677,13 +677,19 @@ export function OptionsCalculator({
           optionType: leg.optionType,
         });
 
-        const mult = (leg.positionType === "long" ? 1 : -1) * leg.quantity;
-        combinedGreeks.delta += greeks.delta * mult;
-        combinedGreeks.gamma += greeks.gamma * mult;
-        combinedGreeks.theta += greeks.theta * mult;
-        combinedGreeks.vega += greeks.vega * mult;
-        combinedGreeks.rho += greeks.rho * mult;
-        totalPremium += leg.premium * mult;
+        const greekMult = (leg.positionType === "long" ? 1 : -1) * leg.quantity * 100;
+        const premiumMult = (leg.positionType === "long" ? 1 : -1) * leg.quantity;
+        combinedGreeks.delta += greeks.delta * greekMult;
+        combinedGreeks.gamma += greeks.gamma * greekMult;
+        combinedGreeks.theta += greeks.theta * greekMult;
+        combinedGreeks.vega += greeks.vega * greekMult;
+        combinedGreeks.rho += greeks.rho * greekMult;
+        totalPremium += leg.premium * premiumMult;
+      }
+
+      if (stockLeg) {
+        combinedGreeks.delta +=
+          (stockLeg.positionType === "long" ? 1 : -1) * stockLeg.quantity;
       }
 
       // Per-leg P&L at expiration: compute max P/L from payoff range
