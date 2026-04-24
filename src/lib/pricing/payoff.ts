@@ -135,6 +135,31 @@ function netCashFlowAtEntry(legs: StrategyLeg[]): number {
   }, 0);
 }
 
+export function calculateUpperTailSlope(legs: StrategyLeg[]): number {
+  return legs.reduce((sum, leg) => {
+    if (isOptionLeg(leg)) {
+      if (leg.optionType !== "call") {
+        return sum;
+      }
+
+      return sum + (leg.positionType === "long" ? 1 : -1) * leg.quantity * 100;
+    }
+
+    return sum + (leg.positionType === "long" ? 1 : -1) * leg.quantity;
+  }, 0);
+}
+
+export function classifyUpperTailRisk(legs: StrategyLeg[]): {
+  isUnlimitedProfit: boolean;
+  isUnlimitedLoss: boolean;
+} {
+  const slope = calculateUpperTailSlope(legs);
+  return {
+    isUnlimitedProfit: slope > 1e-6,
+    isUnlimitedLoss: slope < -1e-6,
+  };
+}
+
 export function calculateRiskCapital(
   legs: StrategyLeg[],
   currentPrice: number,
@@ -274,17 +299,31 @@ export function calculateMaxProfitLoss(payoffPoints: PayoffPoint[]): {
   }
 
   const n = payoffPoints.length;
-  const isUnlimitedProfit =
-    n >= 3 &&
-    payoffPoints[n - 1].profitLoss > payoffPoints[n - 2].profitLoss &&
-    payoffPoints[n - 2].profitLoss > payoffPoints[n - 3].profitLoss &&
-    payoffPoints[n - 1].profitLoss > 0;
+  const tailSlopeThreshold = 5;
+  let isUnlimitedProfit = false;
+  let isUnlimitedLoss = false;
 
-  const isUnlimitedLoss =
-    n >= 3 &&
-    payoffPoints[n - 1].profitLoss < payoffPoints[n - 2].profitLoss &&
-    payoffPoints[n - 2].profitLoss < payoffPoints[n - 3].profitLoss &&
-    payoffPoints[n - 1].profitLoss < 0;
+  if (n >= 3) {
+    const last = payoffPoints[n - 1];
+    const prev = payoffPoints[n - 2];
+    const prevPrev = payoffPoints[n - 3];
+    const dx1 = last.underlyingPrice - prev.underlyingPrice;
+    const dx2 = prev.underlyingPrice - prevPrev.underlyingPrice;
+    const slope1 = dx1 !== 0 ? (last.profitLoss - prev.profitLoss) / dx1 : 0;
+    const slope2 = dx2 !== 0 ? (prev.profitLoss - prevPrev.profitLoss) / dx2 : 0;
+    const minSlope = Math.min(slope1, slope2);
+    const maxSlope = Math.max(slope1, slope2);
+
+    isUnlimitedProfit =
+      minSlope > tailSlopeThreshold &&
+      last.profitLoss > prev.profitLoss &&
+      prev.profitLoss > prevPrev.profitLoss;
+
+    isUnlimitedLoss =
+      maxSlope < -tailSlopeThreshold &&
+      last.profitLoss < prev.profitLoss &&
+      prev.profitLoss < prevPrev.profitLoss;
+  }
 
   return {
     maxProfit,

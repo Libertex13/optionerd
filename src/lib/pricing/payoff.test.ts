@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyUpperTailRisk,
   calculateMaxProfitLoss,
   calculateRiskCapital,
   calculateStrategyProfitLossAtDate,
@@ -163,5 +164,52 @@ describe("pricing/payoff", () => {
     ];
 
     expect(calculateRiskCapital(spread, 105)).toBe(500);
+  });
+
+  it("does not mark a front-expiry put calendar as unlimited loss", () => {
+    const now = new Date("2026-04-24T00:00:00Z");
+    const calendar: StrategyLeg[] = [
+      {
+        optionType: "put",
+        positionType: "long",
+        strikePrice: 105,
+        premium: 11.2,
+        quantity: 4,
+        expirationDate: "2026-06-18",
+        impliedVolatility: 0.6,
+      },
+      {
+        optionType: "put",
+        positionType: "short",
+        strikePrice: 105,
+        premium: 6.86,
+        quantity: 2,
+        expirationDate: "2026-05-15",
+        impliedVolatility: 0.58,
+      },
+    ];
+
+    const frontExpiryPayoff = generatePayoffAtDate(calendar, 117.42, 21, 0.04, now);
+    const limits = calculateMaxProfitLoss(frontExpiryPayoff);
+    const tailRisk = classifyUpperTailRisk(calendar);
+
+    expect(limits.isUnlimitedLoss).toBe(false);
+    expect(tailRisk.isUnlimitedLoss).toBe(false);
+  });
+
+  it("flags net short call upside exposure as unlimited loss", () => {
+    const nakedShortCall: StrategyLeg[] = [
+      {
+        optionType: "call",
+        positionType: "short",
+        strikePrice: 100,
+        premium: 5,
+        quantity: 2,
+        expirationDate: "2026-06-19",
+        impliedVolatility: 0.25,
+      },
+    ];
+
+    expect(classifyUpperTailRisk(nakedShortCall).isUnlimitedLoss).toBe(true);
   });
 });
