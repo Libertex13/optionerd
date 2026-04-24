@@ -44,8 +44,8 @@ export function MiniPayoff({ position: p }: MiniPayoffProps) {
   const current: [number, number][] = [];
   for (let i = 0; i <= steps; i++) {
     const x = minP + ((maxP - minP) * i) / steps;
-    expiry.push([x, payoffAtExpiry(p.legs, x)]);
-    current.push([x, mtm(p.legs, x, p.dte / 365, 0.28)]);
+    expiry.push([x, payoffAtExpiry(p.legs, x, p.stockLeg)]);
+    current.push([x, mtm(p.legs, x, p.stockLeg)]);
   }
 
   let yMin = Infinity;
@@ -151,7 +151,7 @@ export function MiniPayoff({ position: p }: MiniPayoffProps) {
   }
 
   const markerPrice = p.px > 0 ? p.px : centerPrice;
-  const curPL = mtm(p.legs, markerPrice, p.dte / 365, 0.28);
+  const curPL = mtm(p.legs, markerPrice, p.stockLeg);
 
   return (
     <div ref={ref} style={{ width: "100%" }}>

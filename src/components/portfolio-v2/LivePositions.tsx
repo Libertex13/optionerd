@@ -13,6 +13,7 @@ import type {
   LegMark,
   PortfolioLeg,
   PortfolioPosition,
+  PositionStockLeg,
   PositionState,
 } from "@/lib/portfolio/types";
 import { MiniPayoff } from "./MiniPayoff";
@@ -74,6 +75,11 @@ function downloadCsv(positions: PortfolioPosition[]) {
   const rows = positions.map((p) => {
     const legStr = p.legs
       .map((l) => `${l.s === "long" ? "B" : "S"}${l.q}${l.t[0].toUpperCase()}${l.k}`)
+      .concat(
+        p.stockLeg
+          ? [`${p.stockLeg.side === "long" ? "B" : "S"}${p.stockLeg.quantity}SH`]
+          : [],
+      )
       .join("; ");
     return [
       p.ticker,
@@ -106,6 +112,80 @@ interface TickerGroup {
   net: number;
   pnl: number;
   cost: number;
+}
+
+/**
+ * Synthesize a leg-specific name like "CRWV May 15 105 Put" from a leg.
+ */
+function legDisplayName(ticker: string, l: PortfolioLeg): string {
+  const exp = new Date(l.exp);
+  const expFmt = Number.isNaN(exp.getTime())
+    ? l.exp
+    : exp.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const optType = l.t === "call" ? "Call" : "Put";
+  return `${ticker} ${expFmt} ${l.k} ${optType}`;
+}
+
+/**
+ * Extract the real DB position id from a potentially-synthetic leg id.
+ * Synthetic ids look like "<realId>-leg-<index>" — strip the suffix so
+ * delete / refresh calls hit the actual row.
+ */
+export function parentPositionId(id: string): string {
+  const m = id.match(/^(.+)-leg-\d+$/);
+  return m ? m[1] : id;
+}
+
+/**
+ * Flatten multi-leg positions into per-leg synthetic positions so every leg
+ * renders as its own row. A CRWV calendar (1 DB row, 2 legs) becomes 2 rows
+ * under a ticker group, mirroring SMCI (6 DB rows, 1 leg each). Single-leg
+ * positions pass through unchanged.
+ */
+function flattenToLegs(positions: PortfolioPosition[]): PortfolioPosition[] {
+  const out: PortfolioPosition[] = [];
+  const now = Date.now();
+  for (const p of positions) {
+    if (p.stockLeg || p.legs.length <= 1) {
+      out.push(p);
+      continue;
+    }
+    p.legs.forEach((leg, i) => {
+      const mark = p.marks[i];
+      // net in dollars: long = debit (−), short = credit (+)
+      const net = (leg.s === "short" ? 1 : -1) * leg.p * leg.q * 100;
+      const cost = Math.abs(net);
+      const pnl = p.state === "closed" ? 0 : (mark?.pnl ?? 0);
+      const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+      const legDte =
+        mark?.dte ??
+        Math.max(
+          0,
+          Math.round((new Date(leg.exp).getTime() - now) / 86_400_000),
+        );
+      out.push({
+        ...p,
+        id: `${p.id}-leg-${i}`,
+        name: legDisplayName(p.ticker, leg),
+        legs: [leg],
+        marks: mark ? [mark] : [],
+        net,
+        cost,
+        pnl,
+        pnlPct,
+        dte: legDte,
+        greeks: mark
+          ? {
+              delta: mark.delta,
+              gamma: mark.gamma,
+              theta: mark.theta,
+              vega: mark.vega,
+            }
+          : { delta: 0, gamma: 0, theta: 0, vega: 0 },
+      });
+    });
+  }
+  return out;
 }
 
 function buildTickerGroups(positions: PortfolioPosition[]): TickerGroup[] {
@@ -141,9 +221,27 @@ function stateBadgeClass(st: PositionState): string {
   return `${styles.stateBadge} ${map[st]}`;
 }
 
-function LegChips({ legs }: { legs: PortfolioLeg[] }) {
+function LegChips({
+  legs,
+  stockLeg,
+}: {
+  legs: PortfolioLeg[];
+  stockLeg: PositionStockLeg | null;
+}) {
   return (
     <div className={styles.legChips}>
+      {stockLeg && (
+        <span
+          className={`${styles.legChip} ${
+            stockLeg.side === "long" ? styles.legChipLong : styles.legChipShort
+          }`}
+        >
+          <span className={`${styles.legChipS} ${stockLeg.side === "long" ? styles.legChipSLong : styles.legChipSShort}`}>
+            {stockLeg.side === "long" ? "B" : "S"}
+          </span>
+          {stockLeg.quantity} SH
+        </span>
+      )}
       {legs.map((l, i) => (
         <span
           key={i}
@@ -175,12 +273,23 @@ function DteBar({ dte, max }: { dte: number; max: number }) {
 function LegDetailTable({
   legs,
   marks,
+  stockLeg,
+  currentPrice,
   live,
 }: {
   legs: PortfolioLeg[];
   marks: LegMark[];
+  stockLeg: PositionStockLeg | null;
+  currentPrice: number;
   live: boolean;
 }) {
+  const stockHasMark = live && stockLeg && currentPrice > 0;
+  const stockPnl = stockLeg
+    ? (currentPrice - stockLeg.entry_price) *
+      (stockLeg.side === "long" ? 1 : -1) *
+      stockLeg.quantity
+    : 0;
+
   return (
     <div className={styles.legTable}>
       <div className={styles.legTableHead}>
@@ -190,6 +299,38 @@ function LegDetailTable({
         <div className={styles.legTableNum}>Mark</div>
         <div className={styles.legTableNum}>P/L</div>
       </div>
+      {stockLeg && (
+        <div className={styles.legTableRow}>
+          <div className={styles.legTableLeg}>
+            <span
+              className={`${styles.legChipS} ${
+                stockLeg.side === "long" ? styles.legChipSLong : styles.legChipSShort
+              }`}
+            >
+              {stockLeg.side === "long" ? "B" : "S"}
+            </span>
+            <span>{stockLeg.quantity} Shares</span>
+          </div>
+          <div className={styles.legTableExp}>Stock</div>
+          <div className={styles.legTableNum}>${stockLeg.entry_price.toFixed(2)}</div>
+          <div className={styles.legTableNum}>
+            {stockHasMark ? `$${currentPrice.toFixed(2)}` : "—"}
+          </div>
+          <div
+            className={`${styles.legTableNum} ${
+              stockHasMark
+                ? stockPnl > 0
+                  ? styles.pnlPos
+                  : stockPnl < 0
+                    ? styles.pnlNeg
+                    : ""
+                : ""
+            }`}
+          >
+            {stockHasMark ? signedDollar(stockPnl, 0) : "—"}
+          </div>
+        </div>
+      )}
       {legs.map((l, i) => {
         const m = marks[i];
         const hasMark = live && m !== undefined;
@@ -298,8 +439,11 @@ function PositionRow({
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
-        <div className={styles.drag} onClick={(e) => e.stopPropagation()}>
-          ⋮⋮
+        <div
+          className={`${styles.rowChevron} ${expanded ? styles.rowChevronOpen : ""}`}
+          aria-hidden="true"
+        >
+          ▶
         </div>
         <div className={styles.posTicker}>
           {p.ticker}
@@ -314,7 +458,7 @@ function PositionRow({
             {p.strat} · entered {p.entry ?? "—"}
           </span>
         </div>
-        <LegChips legs={p.legs} />
+        <LegChips legs={p.legs} stockLeg={p.stockLeg} />
         <div className={styles.monoNum}>
           {netPrefix}${fmtDollars(p.net)}
           <span className={styles.monoNumSub}>{p.net >= 0 ? "credit" : "debit"}</span>
@@ -328,9 +472,6 @@ function PositionRow({
         </div>
         <div style={{ textAlign: "right" }}>
           <span className={stateBadgeClass(p.state)}>{p.state.toUpperCase()}</span>
-        </div>
-        <div style={{ color: "var(--muted-foreground)", textAlign: "center" }}>
-          {expanded ? "⌄" : "›"}
         </div>
       </div>
 
@@ -365,7 +506,13 @@ function PositionRow({
               <div className={styles.microLabel} style={{ marginBottom: 6 }}>
                 Legs {p.pxLive ? "· marked to live" : "· awaiting live feed"}
               </div>
-              <LegDetailTable legs={p.legs} marks={p.marks} live={p.pxLive} />
+              <LegDetailTable
+                legs={p.legs}
+                marks={p.marks}
+                stockLeg={p.stockLeg}
+                currentPrice={p.px}
+                live={p.pxLive}
+              />
               <div className={styles.microLabel} style={{ margin: "14px 0 5px" }}>
                 Greeks {p.pxLive ? "" : "· awaiting feed"}
               </div>
@@ -488,13 +635,23 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
   }
 
   function confirmAndDelete(id: string, name: string) {
-    const confirmed = window.confirm(`Delete "${name}"? This cannot be undone.`);
-    if (confirmed) void deletePosition(id);
+    const realId = parentPositionId(id);
+    // If this is a synthetic leg row the delete hits the parent position,
+    // which may carry more legs than the user sees on this row — flag it.
+    const isLeg = realId !== id;
+    const msg = isLeg
+      ? `This will delete the entire parent position (all legs), not just "${name}". Continue?`
+      : `Delete "${name}"? This cannot be undone.`;
+    if (window.confirm(msg)) void deletePosition(realId);
   }
+
+  // Flatten multi-leg positions into per-leg rows before filtering / grouping
+  // so every leg renders as its own row under a shared ticker group header.
+  const flat = useMemo(() => flattenToLegs(positions), [positions]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const matched = positions.filter((p) => {
+    const matched = flat.filter((p) => {
       if (stateFilter !== "all" && p.state !== stateFilter) return false;
       if (q) {
         const hay = `${p.ticker} ${p.name} ${p.strat}`.toLowerCase();
@@ -506,7 +663,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
     return [...matched].sort(
       (a, b) => (sortValue(a, sort.key) - sortValue(b, sort.key)) * mult,
     );
-  }, [positions, stateFilter, search, sort]);
+  }, [flat, stateFilter, search, sort]);
 
   const groups = useMemo(() => buildTickerGroups(filtered), [filtered]);
 
@@ -751,7 +908,6 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
             DTE <span className={styles.sortArrow}>{sortArrow(sort, "dte")}</span>
           </div>
           <div className={styles.r}>State</div>
-          <div />
         </div>
         <div>
           {filtered.length === 0 ? (
@@ -823,7 +979,6 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
                           on ${fmtDollars(g.cost)}
                         </span>
                       </div>
-                      <div />
                       <div />
                       <div />
                     </div>
