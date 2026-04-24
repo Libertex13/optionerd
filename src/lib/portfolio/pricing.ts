@@ -85,6 +85,37 @@ function referencePrice(position: PortfolioPosition): number {
   return 1;
 }
 
+function resolveScenarioDaysForward(
+  scn: Scenario,
+  now: Date,
+): number {
+  if (scn.target_date) {
+    const nowDay = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+    );
+    const targetMs = new Date(`${scn.target_date}T00:00:00.000Z`).getTime();
+    if (Number.isFinite(targetMs)) {
+      return Math.max(0, (targetMs - nowDay) / 86_400_000);
+    }
+  }
+  return Math.max(0, scn.advance_days ?? 0);
+}
+
+function shockVolatility(
+  baseIv: number,
+  shock: Scenario["iv_shock"],
+): number {
+  let legIv = baseIv > 0 ? baseIv : 0.28;
+  if (!shock) return legIv;
+  if (shock.mode === "mult") legIv *= shock.val;
+  else if (shock.mode === "add") legIv += shock.val / 100;
+  else if (shock.mode === "abs") legIv = shock.val;
+  // Keep scenario repricing on the smooth BS surface even for "IV crush to 0".
+  return Math.max(0.01, legIv);
+}
+
 function maxDaysToExpiry(position: PortfolioPosition, now: Date = new Date()): number {
   return position.legs.reduce((maxDte, leg) => {
     const dte = Math.ceil(calculateTimeToExpiryYears(leg.exp, 0, now) * 365);
@@ -210,58 +241,30 @@ export interface ScenarioResult {
 export function applyScenario(
   pos: PortfolioPosition,
   scn: Scenario,
+  now: Date = new Date(),
 ): ScenarioResult {
   const rule = scn.underlying_shocks?.[pos.ticker] ?? scn.default_shock ?? null;
+  const basePx = referencePrice(pos);
 
-  let newPx = pos.px;
-  if (rule && rule.mode === "pct") newPx = pos.px * (1 + rule.val / 100);
-  else if (rule && rule.mode === "abs") newPx = rule.val;
+  let newPx = basePx;
+  if (rule && rule.mode === "pct") newPx = basePx * (1 + rule.val / 100);
+  // "pin" is currently a UX alias for an absolute settlement target.
+  else if (rule && (rule.mode === "abs" || rule.mode === "pin")) newPx = rule.val;
 
-  const now = Date.now();
-  const advanceMs = (scn.advance_days ?? 0) * 86_400_000;
+  const daysForward = resolveScenarioDaysForward(scn, now);
   const r = scn.interest_rate ?? 0.045;
-  const shock = scn.iv_shock;
-
-  let newValue = 0;
-  for (const leg of pos.legs) {
-    const expMs = new Date(`${leg.exp}T23:59:59.999Z`).getTime();
-    const daysLeft = Number.isFinite(expMs)
-      ? (expMs - now - advanceMs) / 86_400_000
-      : 0;
-
-    const baseIv = leg.iv && leg.iv > 0 ? leg.iv : 0.28;
-    let legIv = baseIv;
-    if (shock) {
-      if (shock.mode === "mult") legIv = baseIv * shock.val;
-      else if (shock.mode === "add") legIv = baseIv + shock.val / 100;
-      else if (shock.mode === "abs") legIv = shock.val;
-    }
-    legIv = Math.max(0.01, legIv);
-
-    let value: number;
-    if (daysLeft <= 0) {
-      value =
-        leg.t === "call"
-          ? Math.max(newPx - leg.k, 0)
-          : Math.max(leg.k - newPx, 0);
-    } else {
-      value = blackScholesPrice({
-        spotPrice: newPx,
-        strikePrice: leg.k,
-        timeToExpiry: daysLeft / 365,
-        riskFreeRate: r,
-        volatility: legIv,
-        optionType: leg.t,
-      });
-    }
-
-    const sign = leg.s === "long" ? 1 : -1;
-    newValue += (value - leg.p) * sign * leg.q * 100;
-  }
-
-  if (pos.stockLeg) {
-    newValue += stockProfitLoss(pos.stockLeg, newPx);
-  }
+  const shockedLegs = toStrategyLegs(
+    pos.legs.map((leg) => ({
+      ...leg,
+      iv: shockVolatility(leg.iv, scn.iv_shock),
+    })),
+    pos.stockLeg,
+  );
+  const newValue = calculateStrategyProfitLossAtDate(shockedLegs, newPx, {
+    daysForward,
+    riskFreeRate: r,
+    now,
+  }).profitLoss;
 
   return { newPx, newValue, delta: newValue - pos.pnl };
 }

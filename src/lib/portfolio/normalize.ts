@@ -58,8 +58,8 @@ export function normalizePosition(pos: Position): PortfolioPosition {
   const strat = pos.strategy ?? inferStrategy(pos) ?? "custom";
   const entry = pos.entry_date ? pos.entry_date.slice(0, 10) : null;
 
-  const px = pos.entry_underlying_price ?? 0;
-  const mark = markPosition(legs, px > 0 ? px : referencePrice, stockLeg, now);
+  const px = pos.entry_underlying_price ?? referencePrice;
+  const mark = markPosition(legs, px, stockLeg, now);
 
   const pnl = pos.state === "closed" ? pos.realised_pnl ?? 0 : mark.pnl;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
@@ -72,6 +72,7 @@ export function normalizePosition(pos: Position): PortfolioPosition {
     ticker: pos.ticker,
     px,
     pxLive: false,
+    markSource: "entry",
     legs,
     stockLeg,
     net,
@@ -99,6 +100,7 @@ export function normalizePosition(pos: Position): PortfolioPosition {
 export function applyLivePrice(
   pos: PortfolioPosition,
   livePx: number,
+  source: "chain" | "bs-fallback" = "bs-fallback",
 ): PortfolioPosition {
   if (!(livePx > 0)) return pos;
   const mark = markPosition(pos.legs, livePx, pos.stockLeg);
@@ -109,6 +111,7 @@ export function applyLivePrice(
     ...pos,
     px: livePx,
     pxLive: true,
+    markSource: source,
     pnl,
     pnlPct,
     marks: mark.marks,
@@ -153,6 +156,7 @@ export function applyLiveMarks(
       ...pos,
       px: livePx,
       pxLive: true,
+      markSource: "chain",
       pnl: pos.state === "closed" ? pos.pnl : stockPnl,
       pnlPct:
         pos.cost > 0
@@ -174,7 +178,14 @@ export function applyLiveMarks(
     (contract) => !contract || !(contract.mid > 0) || !Number.isFinite(contract.mid),
   );
   if (unresolved) {
-    return livePx > 0 ? { ...pos, px: livePx } : pos;
+    if (!(livePx > 0)) return pos;
+    const fallbackLegs: PortfolioLeg[] = pos.legs.map((leg, index) => {
+      const contract = contracts[index];
+      return contract && contract.impliedVolatility > 0 && contract.impliedVolatility !== leg.iv
+        ? { ...leg, iv: contract.impliedVolatility }
+        : leg;
+    });
+    return applyLivePrice({ ...pos, legs: fallbackLegs }, livePx, "bs-fallback");
   }
 
   const legs: PortfolioLeg[] = pos.legs.map((leg, index) => {
@@ -230,6 +241,7 @@ export function applyLiveMarks(
     ...pos,
     px: livePx > 0 ? livePx : pos.px,
     pxLive: livePx > 0,
+    markSource: livePx > 0 ? "chain" : pos.markSource,
     legs,
     pnl,
     pnlPct,

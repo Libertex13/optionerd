@@ -623,6 +623,19 @@
   animation: pfPulse 2s infinite;
 }
 
+.markBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border: 1px solid #f59e0b66;
+  border-radius: 2px;
+  color: #f59e0b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  vertical-align: middle;
+}
+
 .legTable {
   border: 1px solid var(--border);
   border-radius: 4px;

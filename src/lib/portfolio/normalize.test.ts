@@ -45,6 +45,7 @@ describe("portfolio/normalize", () => {
     expect(normalized.stockLeg).toEqual(basePosition.stock_leg);
     expect(normalized.cost).toBe(9700);
     expect(normalized.net).toBe(-9700);
+    expect(normalized.markSource).toBe("entry");
   });
 
   it("applies live price fallback to option and stock components", () => {
@@ -53,6 +54,7 @@ describe("portfolio/normalize", () => {
 
     expect(live.px).toBe(108);
     expect(live.pxLive).toBe(true);
+    expect(live.markSource).toBe("bs-fallback");
     expect(live.pnl).toBeGreaterThan(0);
     expect(live.greeks.delta).toBeGreaterThan(0);
   });
@@ -96,6 +98,7 @@ describe("portfolio/normalize", () => {
     const live = applyLiveMarks(normalized, chain);
 
     expect(live.pxLive).toBe(true);
+    expect(live.markSource).toBe("chain");
     expect(live.px).toBe(108);
     expect(live.pnl).toBeCloseTo(880, 6);
     expect(live.greeks.delta).toBeCloseTo(58, 6);
@@ -124,5 +127,89 @@ describe("portfolio/normalize", () => {
     expect(live.pnl).toBe(500);
     expect(live.greeks.delta).toBe(50);
     expect(live.pxLive).toBe(true);
+    expect(live.markSource).toBe("chain");
+  });
+
+  it("uses a fallback price baseline when entry spot is missing", () => {
+    const withoutEntrySpot = normalizePosition({
+      ...basePosition,
+      id: "pos-3",
+      entry_underlying_price: null,
+      stock_leg: null,
+      legs: [
+        {
+          side: "long",
+          type: "call",
+          strike: 95,
+          entry_premium: 6,
+          quantity: 1,
+          expiration_date: "2026-06-19",
+          implied_volatility: 0.3,
+        },
+        {
+          side: "short",
+          type: "call",
+          strike: 105,
+          entry_premium: 2,
+          quantity: 1,
+          expiration_date: "2026-06-19",
+          implied_volatility: 0.3,
+        },
+      ],
+    });
+
+    expect(withoutEntrySpot.px).toBe(100);
+    expect(withoutEntrySpot.pxLive).toBe(false);
+    expect(withoutEntrySpot.markSource).toBe("entry");
+  });
+
+  it("falls back to live underlying repricing when chain mids are incomplete", () => {
+    const normalized = normalizePosition(basePosition);
+    const live = applyLiveMarks(normalized, {
+      ticker: "AAPL",
+      underlyingPrice: 108,
+      expirations: [
+        {
+          expirationDate: "2026-06-19",
+          daysToExpiry: 49,
+          calls: [
+            {
+              contractSymbol: "AAPL260619C00110000",
+              ticker: "AAPL",
+              expirationDate: "2026-06-19",
+              strikePrice: 110,
+              optionType: "call",
+              bid: 0,
+              ask: 0,
+              last: 0,
+              mid: 0,
+              volume: 100,
+              openInterest: 1000,
+              impliedVolatility: 0.24,
+              delta: 0.42,
+              gamma: 0.03,
+              theta: -0.05,
+              vega: 0.12,
+              rho: 0,
+              inTheMoney: false,
+            },
+          ],
+          puts: [],
+        },
+      ],
+    });
+    const fallback = applyLivePrice(
+      {
+        ...normalized,
+        legs: normalized.legs.map((leg) => ({ ...leg, iv: 0.24 })),
+      },
+      108,
+    );
+
+    expect(live.px).toBe(108);
+    expect(live.pxLive).toBe(true);
+    expect(live.markSource).toBe("bs-fallback");
+    expect(live.pnl).toBeCloseTo(fallback.pnl, 6);
+    expect(live.greeks.delta).toBeCloseTo(fallback.greeks.delta, 6);
   });
 });

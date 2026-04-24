@@ -394,6 +394,12 @@ function PositionRow({
   onMouseLeave: () => void;
 }) {
   const p = position;
+  const isEstimated = p.markSource === "bs-fallback";
+  const markLabel = !p.pxLive
+    ? "awaiting live feed"
+    : isEstimated
+      ? "estimated from live underlying"
+      : "marked to live";
   const netPrefix = p.net >= 0 ? "+" : "−";
   const canShowLivePnl = p.pxLive && p.state !== "watching";
   const displayPnl = p.state === "closed" ? p.pnl : canShowLivePnl ? p.pnl : 0;
@@ -450,6 +456,7 @@ function PositionRow({
           <span className={styles.tkPx}>
             {p.px > 0 ? `$${p.px.toFixed(2)}` : "—"}
             {p.pxLive && <span className={styles.liveDot} aria-label="live" />}
+            {isEstimated && <span className={styles.markBadge}>EST.</span>}
           </span>
         </div>
         <div className={styles.posName}>
@@ -504,7 +511,7 @@ function PositionRow({
             </div>
             <div>
               <div className={styles.microLabel} style={{ marginBottom: 6 }}>
-                Legs {p.pxLive ? "· marked to live" : "· awaiting live feed"}
+                Legs · {markLabel}
               </div>
               <LegDetailTable
                 legs={p.legs}
@@ -514,7 +521,7 @@ function PositionRow({
                 live={p.pxLive}
               />
               <div className={styles.microLabel} style={{ margin: "14px 0 5px" }}>
-                Greeks {p.pxLive ? "" : "· awaiting feed"}
+                Greeks {p.pxLive ? (isEstimated ? "· est." : "") : "· awaiting feed"}
               </div>
               <div className={styles.statRow}>
                 <div>

@@ -113,6 +113,7 @@ export interface PortfolioPosition {
   ticker: string;
   px: number;           // current underlying (live if feed available, else entry)
   pxLive: boolean;      // true when px comes from a live quote
+  markSource: "entry" | "chain" | "bs-fallback";
   legs: PortfolioLeg[];
   stockLeg: PositionStockLeg | null;
   net: number;          // credit (+) / debit (−) in dollars

@@ -64,6 +64,7 @@ describe("portfolio/pricing", () => {
       ticker: "AAPL",
       px: 100,
       pxLive: true,
+      markSource: "chain",
       legs: [
         {
           s: "short",
@@ -117,6 +118,7 @@ describe("portfolio/pricing", () => {
       ticker: "AAPL",
       px: 100,
       pxLive: true,
+      markSource: "chain",
       legs: [
         {
           s: "long",
@@ -144,5 +146,299 @@ describe("portfolio/pricing", () => {
     expect(maxLossLabel(position)).toBe("-$500");
     expect(breakevenLabel(position)).toContain("$105.00");
     expect(popLabel(position)).toMatch(/^\d+%$/);
+  });
+
+  it("uses a non-zero fallback baseline for scenarios when entry spot is missing", () => {
+    const position: PortfolioPosition = {
+      id: "pos-3",
+      state: "open",
+      name: "Call spread",
+      strat: "call-spread",
+      ticker: "AAPL",
+      px: 0,
+      pxLive: false,
+      markSource: "entry",
+      legs: [
+        {
+          s: "long",
+          t: "call",
+          k: 95,
+          p: 6,
+          q: 1,
+          iv: 0.3,
+          exp: "2026-06-19",
+        },
+        {
+          s: "short",
+          t: "call",
+          k: 105,
+          p: 2,
+          q: 1,
+          iv: 0.3,
+          exp: "2026-06-19",
+        },
+      ],
+      stockLeg: null,
+      net: -400,
+      dte: 49,
+      dteMax: 49,
+      cost: 400,
+      pnl: 0,
+      pnlPct: 0,
+      entry: "2026-05-01",
+      marks: [],
+      greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 },
+    };
+
+    const result = applyScenario(position, {
+      id: "shock-2",
+      user_id: null,
+      name: "Up 10%",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "pct", val: 10 },
+      iv_shock: null,
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    });
+
+    expect(result.newPx).toBeCloseTo(110, 10);
+    expect(result.newValue).toBeGreaterThan(0);
+  });
+
+  it("honors target_date and pin shocks in scenarios", () => {
+    const position: PortfolioPosition = {
+      id: "pos-4",
+      state: "open",
+      name: "Long call",
+      strat: "long-call",
+      ticker: "AAPL",
+      px: 100,
+      pxLive: true,
+      markSource: "chain",
+      legs: [
+        {
+          s: "long",
+          t: "call",
+          k: 100,
+          p: 5,
+          q: 1,
+          iv: 0.25,
+          exp: "2026-06-19",
+        },
+      ],
+      stockLeg: null,
+      net: -500,
+      dte: 49,
+      dteMax: 49,
+      cost: 500,
+      pnl: 0,
+      pnlPct: 0,
+      entry: "2026-05-01",
+      marks: [],
+      greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 },
+    };
+    const now = new Date("2026-05-01T00:00:00Z");
+
+    const pinned = applyScenario(position, {
+      id: "shock-3",
+      user_id: null,
+      name: "Pin 103",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "pin", val: 103 },
+      iv_shock: null,
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    const atTargetDate = applyScenario(position, {
+      id: "shock-4",
+      user_id: null,
+      name: "Ten days later",
+      description: null,
+      target_date: "2026-05-11",
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: null,
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    const samePriceToday = applyScenario(position, {
+      id: "shock-5",
+      user_id: null,
+      name: "Today",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: null,
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    expect(pinned.newPx).toBe(103);
+    expect(atTargetDate.newValue).toBeLessThan(samePriceToday.newValue);
+  });
+
+  it("treats target_date on the current UTC day the same as zero days forward", () => {
+    const position: PortfolioPosition = {
+      id: "pos-5",
+      state: "open",
+      name: "Long call",
+      strat: "long-call",
+      ticker: "AAPL",
+      px: 100,
+      pxLive: true,
+      markSource: "chain",
+      legs: [
+        {
+          s: "long",
+          t: "call",
+          k: 100,
+          p: 5,
+          q: 1,
+          iv: 0.25,
+          exp: "2026-06-19",
+        },
+      ],
+      stockLeg: null,
+      net: -500,
+      dte: 49,
+      dteMax: 49,
+      cost: 500,
+      pnl: 0,
+      pnlPct: 0,
+      entry: "2026-05-01",
+      marks: [],
+      greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 },
+    };
+    const now = new Date("2026-05-01T15:30:00Z");
+
+    const withTargetDate = applyScenario(position, {
+      id: "shock-6",
+      user_id: null,
+      name: "Target today",
+      description: null,
+      target_date: "2026-05-01",
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: null,
+      advance_days: 999,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    const sameDay = applyScenario(position, {
+      id: "shock-7",
+      user_id: null,
+      name: "Zero days",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: null,
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    expect(withTargetDate.newValue).toBeCloseTo(sameDay.newValue, 10);
+  });
+
+  it("clamps scenario IV crushes to the configured floor", () => {
+    const position: PortfolioPosition = {
+      id: "pos-6",
+      state: "open",
+      name: "Long call",
+      strat: "long-call",
+      ticker: "AAPL",
+      px: 100,
+      pxLive: true,
+      markSource: "chain",
+      legs: [
+        {
+          s: "long",
+          t: "call",
+          k: 100,
+          p: 5,
+          q: 1,
+          iv: 0.25,
+          exp: "2026-06-19",
+        },
+      ],
+      stockLeg: null,
+      net: -500,
+      dte: 49,
+      dteMax: 49,
+      cost: 500,
+      pnl: 0,
+      pnlPct: 0,
+      entry: "2026-05-01",
+      marks: [],
+      greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 },
+    };
+    const now = new Date("2026-05-01T00:00:00Z");
+
+    const zeroVol = applyScenario(position, {
+      id: "shock-8",
+      user_id: null,
+      name: "Zero IV",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: { mode: "abs", val: 0 },
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    const flooredVol = applyScenario(position, {
+      id: "shock-9",
+      user_id: null,
+      name: "Floor IV",
+      description: null,
+      target_date: null,
+      underlying_shocks: {},
+      default_shock: { mode: "abs", val: 100 },
+      iv_shock: { mode: "abs", val: 0.01 },
+      advance_days: 0,
+      interest_rate: 0.04,
+      notes: null,
+      created_at: "2026-05-01T00:00:00Z",
+      updated_at: "2026-05-01T00:00:00Z",
+      is_preset: true,
+    }, now);
+
+    expect(zeroVol.newValue).toBeCloseTo(flooredVol.newValue, 10);
   });
 });
