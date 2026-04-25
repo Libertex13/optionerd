@@ -61,6 +61,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('optionerd-tint')||'teal';document.documentElement.dataset.tint=t;}catch(e){document.documentElement.dataset.tint='teal';}`,
+          }}
+        />
         <Script
           defer
           src="https://plausible.io/js/pa-XJOIrd8jpB1fS90cMEoWo.js"
