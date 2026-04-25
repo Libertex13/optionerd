@@ -11,7 +11,7 @@ const MAX_CHARS = 200_000;
 
 const EXTRACTION_PROMPT = `You are parsing text pasted from a brokerage positions table or statement (TradeStation, IBKR, Schwab, Fidelity, tastytrade, etc.). The input may be tab-separated rows, CSV, a copy-paste from a web UI, or free-form statement text.
 
-Task: extract every OPTION position (calls and puts only — skip pure stock positions, skip totals/summary rows, skip cash balances).
+Task: extract every open position: options, pure stock/share positions, and stock paired with options (for example covered calls). Skip totals/summary rows and cash balances.
 
 ## Critical: identify columns before parsing
 
@@ -51,6 +51,7 @@ Output strict JSON with this shape. No prose, no code fences.
     {
       "ticker": "FORM",
       "description": "FORM May 15 125 Call",
+      "stock_leg": null,
       "legs": [
         { "side": "long", "option_type": "call", "strike": 125, "quantity": 2, "entry_premium": 15.25, "expiration_date": "2026-05-15" }
       ]
@@ -58,10 +59,17 @@ Output strict JSON with this shape. No prose, no code fences.
     {
       "ticker": "CRWV",
       "description": "CRWV Put Calendar 105 May/Jun",
+      "stock_leg": null,
       "legs": [
         { "side": "short", "option_type": "put", "strike": 105, "quantity": 2, "entry_premium": 6.35, "expiration_date": "2026-05-15" },
         { "side": "long",  "option_type": "put", "strike": 105, "quantity": 4, "entry_premium": 10.60, "expiration_date": "2026-06-18" }
       ]
+    },
+    {
+      "ticker": "AAPL",
+      "description": "AAPL 100 shares",
+      "stock_leg": { "side": "long", "quantity": 100, "entry_price": 178.25 },
+      "legs": []
     }
   ],
   "notes": "optional free-text note if something was ambiguous"
@@ -69,12 +77,14 @@ Output strict JSON with this shape. No prose, no code fences.
 
 Rules:
 - entry_premium is always a positive number — the "side" field encodes long/short.
+- stock_leg.entry_price is the stock/share entry price per share. Use Avg Price / Avg Cost / Open Price, not Last / Mark / Bid / Ask.
 - quantity is a positive integer. "Long 2" → quantity 2, side "long". "Short 5" / "-5" → quantity 5, side "short".
 - Omit cost_basis entirely (or set it to null). The caller recomputes it from legs.
 - If the input shows only month/day (like "May 15"), infer the expiration year forward from today — use the next occurrence. Assume the current year is 2026 or later unless the paste clearly shows otherwise.
 - expiration_date must be YYYY-MM-DD with a 4-digit year.
-- Skip any row where any required leg field is missing or ambiguous — it's fine to drop rows.
-- If the input is empty or contains no option positions, return { "positions": [] }.
+- Pure stock positions must use "legs": [] and a non-null stock_leg.
+- Skip any row where any required option leg or stock leg field is missing or ambiguous — it's fine to drop rows.
+- If the input is empty or contains no positions, return { "positions": [] }.
 - Return ONLY the JSON object.`;
 
 /**

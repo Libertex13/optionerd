@@ -330,6 +330,11 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                     <div className={styles.mono}>{r.ticker}</div>
                     <div className={styles.previewCardName}>
                       {r.name}
+                      {r.stock_leg && r.legs.length === 0 && (
+                        <span className={styles.previewLegCount}>
+                          shares · {r.strategy}
+                        </span>
+                      )}
                       {r.legs.length > 1 && (
                         <span className={styles.previewLegCount}>
                           {r.legs.length} legs · {r.strategy}
@@ -353,6 +358,22 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                     </button>
                   </div>
                   <div className={styles.previewLegList}>
+                    {r.stock_leg && (
+                      <div className={styles.previewLegRow}>
+                        <span
+                          className={`${styles.previewLegSide} ${r.stock_leg.side === "long" ? styles.previewLegLong : styles.previewLegShort}`}
+                        >
+                          {r.stock_leg.side === "long" ? "B" : "S"}
+                        </span>
+                        <span className={styles.mono}>{r.stock_leg.quantity} SH</span>
+                        <span className={styles.mono} style={{ color: "var(--muted-foreground)" }}>
+                          shares
+                        </span>
+                        <span className={styles.mono} style={{ color: "var(--muted-foreground)" }}>
+                          @ ${r.stock_leg.entry_price.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     {r.legs.map((leg, li) => (
                       <div className={styles.previewLegRow} key={li}>
                         <span
@@ -380,17 +401,16 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
 
           {mode === "paste" && parsed && rows.length === 0 && (
             <div className={styles.importHint}>
-              No option positions detected in that paste. Include a line that
-              identifies the contract (ticker, expiration, strike, call/put),
-              the quantity, and an entry price. CSV, tab-separated, or plain
-              broker copy-paste all work.
+              No positions detected in that paste. Include ticker, quantity,
+              and entry price for shares, or contract details for options
+              (expiration, strike, call/put).
             </div>
           )}
 
           {mode === "screenshot" && parsed && rows.length === 0 && (
             <div className={styles.importHint}>
-              No option positions detected in that screenshot. Make sure the
-              table is clearly visible and includes description, quantity, avg
+              No positions detected in that screenshot. Make sure the table is
+              clearly visible and includes ticker/description, quantity, avg
               price, and total cost columns.
             </div>
           )}

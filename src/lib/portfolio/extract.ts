@@ -1,4 +1,4 @@
-import type { PositionLeg } from "./types";
+import type { PositionLeg, PositionStockLeg } from "./types";
 import type { ParsedPositionDraft } from "./importParser";
 
 export interface ExtractedLeg {
@@ -14,6 +14,11 @@ export interface ExtractedPosition {
   ticker: string;
   description: string;
   legs: ExtractedLeg[];
+  stock_leg?: {
+    side: "long" | "short";
+    quantity: number;
+    entry_price: number;
+  } | null;
   cost_basis: number | null;
 }
 
@@ -22,9 +27,16 @@ export interface ExtractionResult {
   notes?: string;
 }
 
-export function inferStrategy(legs: PositionLeg[]): string {
+export function inferStrategy(
+  legs: PositionLeg[],
+  stockLeg: PositionStockLeg | null = null,
+): string {
+  if (legs.length === 0 && stockLeg) return "stock";
   if (legs.length === 1) {
     const l = legs[0];
+    if (stockLeg?.side === "long" && l.side === "short" && l.type === "call") {
+      return "covered-call";
+    }
     return `${l.side}-${l.type}`;
   }
   const calls = legs.filter((l) => l.type === "call");
@@ -73,12 +85,20 @@ export function toParsedDraft(p: ExtractedPosition): ParsedPositionDraft {
     expiration_date: l.expiration_date,
     implied_volatility: 0,
   }));
+  const stockLeg = p.stock_leg
+    ? {
+        side: p.stock_leg.side,
+        quantity: p.stock_leg.quantity,
+        entry_price: p.stock_leg.entry_price,
+      }
+    : null;
   return {
     name: p.description,
     ticker: p.ticker.toUpperCase(),
-    strategy: inferStrategy(legs),
+    strategy: inferStrategy(legs, stockLeg),
     cost_basis: null,
     legs,
+    stock_leg: stockLeg,
   };
 }
 
@@ -96,16 +116,31 @@ export function isValidLeg(l: unknown): l is ExtractedLeg {
   );
 }
 
+export function isValidStockLeg(l: unknown): l is NonNullable<ExtractedPosition["stock_leg"]> {
+  if (!l || typeof l !== "object") return false;
+  const x = l as Record<string, unknown>;
+  return (
+    (x.side === "long" || x.side === "short") &&
+    typeof x.quantity === "number" &&
+    x.quantity > 0 &&
+    typeof x.entry_price === "number" &&
+    x.entry_price > 0
+  );
+}
+
 export function isValidExtractedPosition(
   p: unknown,
 ): p is ExtractedPosition {
   if (!p || typeof p !== "object") return false;
   const x = p as Record<string, unknown>;
+  if (!Array.isArray(x.legs)) return false;
+  const legs = x.legs;
+  const stockLeg = x.stock_leg ?? null;
   return (
     typeof x.ticker === "string" &&
     typeof x.description === "string" &&
-    Array.isArray(x.legs) &&
-    x.legs.length > 0 &&
-    x.legs.every(isValidLeg)
+    legs.every(isValidLeg) &&
+    (legs.length > 0 || isValidStockLeg(stockLeg)) &&
+    (stockLeg == null || isValidStockLeg(stockLeg))
   );
 }

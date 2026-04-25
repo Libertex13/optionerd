@@ -1,4 +1,4 @@
-import type { PositionLeg } from "./types";
+import type { PositionLeg, PositionStockLeg } from "./types";
 
 export interface ParsedPositionDraft {
   name: string;
@@ -6,6 +6,7 @@ export interface ParsedPositionDraft {
   strategy: string;
   cost_basis: number | null;
   legs: PositionLeg[];
+  stock_leg?: PositionStockLeg | null;
 }
 
 export interface ParseResult {
@@ -167,6 +168,7 @@ export function parseBrokerPaste(text: string): ParseResult {
       strategy: `${pos.side}-${desc.type}`,
       cost_basis: totalCost,
       legs: [leg],
+      stock_leg: null,
     });
   }
 

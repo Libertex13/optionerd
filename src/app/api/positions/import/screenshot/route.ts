@@ -12,7 +12,7 @@ const ALLOWED_MIME = /^image\/(png|jpe?g|webp|gif)$/i;
 
 const EXTRACTION_PROMPT = `You are reading a screenshot of a brokerage positions table.
 
-Task: extract every OPTION position (calls and puts only — skip pure stock positions, skip totals rows).
+Task: extract every open position: options, pure stock/share positions, and stock paired with options (for example covered calls). Skip totals rows and cash balances.
 
 Each position may have MULTIPLE LEGS. Look carefully for visual grouping cues that indicate multi-leg trades:
 - A parent/summary row with an aggregated description like "Coreweave Inc [CRWV] May 2026 105.00" followed by indented child rows with individual legs. Use the parent description as the position name and treat each child row as one leg.
@@ -29,6 +29,7 @@ Output strict JSON with this shape. No prose, no code fences.
       "ticker": "FORM",
       "description": "FORM May 15 125 Call",
       "cost_basis": 3050,
+      "stock_leg": null,
       "legs": [
         { "side": "long", "option_type": "call", "strike": 125, "quantity": 2, "entry_premium": 15.25, "expiration_date": "2026-05-15" }
       ]
@@ -37,10 +38,18 @@ Output strict JSON with this shape. No prose, no code fences.
       "ticker": "CRWV",
       "description": "CRWV Put Calendar 105 May/Jun",
       "cost_basis": 5510,
+      "stock_leg": null,
       "legs": [
         { "side": "short", "option_type": "put", "strike": 105, "quantity": 2, "entry_premium": 6.35, "expiration_date": "2026-05-15" },
         { "side": "long",  "option_type": "put", "strike": 105, "quantity": 4, "entry_premium": 10.60, "expiration_date": "2026-06-18" }
       ]
+    },
+    {
+      "ticker": "AAPL",
+      "description": "AAPL 100 shares",
+      "cost_basis": null,
+      "stock_leg": { "side": "long", "quantity": 100, "entry_price": 178.25 },
+      "legs": []
     }
   ],
   "notes": "optional"
@@ -48,11 +57,13 @@ Output strict JSON with this shape. No prose, no code fences.
 
 Rules:
 - entry_premium is always positive — the "side" field encodes long/short.
+- stock_leg.entry_price is the stock/share entry price per share. Use Avg Price / Avg Cost / Open Price, not Last / Mark / Bid / Ask.
 - cost_basis is the total capital committed for the whole POSITION (sum across legs if the broker shows a group total; otherwise set to null).
 - quantity is always a positive integer.
 - If the description shows only month/day (like "May 15"), infer expiration year forward from today — use the next occurrence.
-- Skip rows where any required leg field is missing or unreadable.
-- If the screenshot shows no option positions, return { "positions": [] }.
+- Pure stock positions must use "legs": [] and a non-null stock_leg.
+- Skip rows where any required option leg or stock leg field is missing or unreadable.
+- If the screenshot shows no positions, return { "positions": [] }.
 - Return ONLY the JSON object.`;
 
 /**
