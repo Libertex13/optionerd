@@ -5,7 +5,7 @@
 
 /* Tabs under the header */
 .tabs {
-  max-width: 1400px;
+  max-width: 80rem; /* 1280px — matches header's max-w-7xl */
   margin: 0 auto;
   display: flex;
   gap: 2px;
@@ -73,7 +73,7 @@
 }
 
 .page {
-  max-width: 1400px;
+  max-width: 80rem; /* 1280px — matches header's max-w-7xl */
   margin: 0 auto;
   padding: 20px 16px 80px;
 }
