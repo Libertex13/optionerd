@@ -4,15 +4,22 @@ import { useEffect, useState } from "react";
 import styles from "./portfolio.module.css";
 import { LivePositions } from "./LivePositions";
 import { Scenarios } from "./Scenarios";
+import { RepairLab } from "./RepairLab";
 import { ImportDialog } from "./ImportDialog";
 import { usePositions } from "@/hooks/usePositions";
 import { useScenarios } from "@/hooks/useScenarios";
 import { useAuth } from "@/hooks/useAuth";
 
-type Tab = "live" | "scenarios";
+type Tab = "live" | "repair" | "scenarios";
 
 export function PortfolioDashboard() {
-  const [tab, setTab] = useState<Tab>("live");
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "live";
+    const stored = window.localStorage.getItem("pf-tab");
+    return stored === "live" || stored === "repair" || stored === "scenarios"
+      ? stored
+      : "live";
+  });
   const [now, setNow] = useState<number>(() => Date.now());
   const [importOpen, setImportOpen] = useState(false);
 
@@ -24,16 +31,9 @@ export function PortfolioDashboard() {
     refresh,
     lastTick,
     liveCoverage,
+    chains,
   } = usePositions();
-  const { scenarios, loading: scnLoading } = useScenarios();
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      const stored = localStorage.getItem("pf-tab");
-      if (stored === "live" || stored === "scenarios") setTab(stored);
-    }, 0);
-    return () => clearTimeout(id);
-  }, []);
+  const { scenarios, loading: scnLoading, refresh: refreshScenarios } = useScenarios();
 
   useEffect(() => {
     localStorage.setItem("pf-tab", tab);
@@ -70,6 +70,12 @@ export function PortfolioDashboard() {
         >
           Scenarios <span className={styles.count}>{scenarios.length}</span>
         </button>
+        <button
+          className={`${styles.tab} ${tab === "repair" ? styles.tabActive : ""}`}
+          onClick={() => setTab("repair")}
+        >
+          Repair Lab
+        </button>
         <div className={styles.tabsRight}>
           <span className={styles.refresh}>
             <span className={styles.pulseDot} />
@@ -83,7 +89,12 @@ export function PortfolioDashboard() {
           >
             Import
           </button>
-          <button className={`${styles.btn} ${styles.btnSm}`}>+ New position</button>
+          <button
+            className={`${styles.btn} ${styles.btnSm}`}
+            onClick={() => { window.location.href = "/"; }}
+          >
+            + New position
+          </button>
         </div>
       </div>
 
@@ -132,10 +143,21 @@ export function PortfolioDashboard() {
         ) : (
           <>
             {tab === "live" && (
-              <LivePositions positions={positions} onRefresh={refresh} />
+              <LivePositions
+                positions={positions}
+                onRefresh={refresh}
+                onOpenRepair={() => setTab("repair")}
+              />
+            )}
+            {tab === "repair" && (
+              <RepairLab positions={positions} chains={chains} />
             )}
             {tab === "scenarios" && (
-              <Scenarios positions={positions} scenarios={scenarios} />
+              <Scenarios
+                positions={positions}
+                scenarios={scenarios}
+                onRefresh={refreshScenarios}
+              />
             )}
           </>
         )}
