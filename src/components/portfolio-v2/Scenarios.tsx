@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./portfolio.module.css";
 import {
   applyScenario,
@@ -18,9 +18,10 @@ import type {
 interface ScenariosProps {
   positions: PortfolioPosition[];
   scenarios: Scenario[];
+  onRefresh: () => Promise<void> | void;
 }
 
-export function Scenarios({ positions, scenarios }: ScenariosProps) {
+export function Scenarios({ positions, scenarios, onRefresh }: ScenariosProps) {
   const [mode, setMode] = useState<"grid" | "single" | "compare" | "stress">("grid");
   const [library, setLibrary] = useState<"all" | "system" | "personal">("all");
   const [gridMode, setGridMode] = useState<"pnl" | "pct" | "delta">("pnl");
@@ -35,10 +36,35 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
     return !s.is_preset;
   });
 
-  const activeScns = useMemo(
+  const baseActiveScns = useMemo(
     () => scenarios.filter((s) => activeIds.includes(s.id)),
     [activeIds, scenarios],
   );
+
+  const togglePreset = (id: string) => {
+    setActiveIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (next.length === 0 && systemIds.length > 0) return [systemIds[0]];
+      return next;
+    });
+    setFocusedId(id);
+  };
+
+  const focusedScenario =
+    scenarios.find((s) => s.id === focusedId) ?? scenarios[0];
+  const [draftScenario, setDraftScenario] = useState<Scenario | null>(focusedScenario ?? null);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDraftScenario(focusedScenario ?? null), 0);
+    return () => clearTimeout(id);
+  }, [focusedScenario]);
+
+  const activeScns = useMemo(() => {
+    if (mode === "single") return draftScenario ? [draftScenario] : [];
+    if (mode === "compare") return baseActiveScns.slice(0, 2);
+    if (mode === "stress") return scenarios;
+    return baseActiveScns;
+  }, [baseActiveScns, draftScenario, mode, scenarios]);
 
   const grid = useMemo(
     () =>
@@ -54,44 +80,135 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
     return Math.max(...all.map(Math.abs), 1);
   }, [grid]);
 
-  const togglePreset = (id: string) => {
-    setActiveIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      if (next.length === 0 && systemIds.length > 0) return [systemIds[0]];
-      return next;
-    });
-    setFocusedId(id);
-  };
-
-  const focusedScenario =
-    scenarios.find((s) => s.id === focusedId) ?? scenarios[0];
-
   const attribution = useMemo(() => {
-    if (!focusedScenario) return { entries: [] as [string, number][], max: 1 };
+    if (!draftScenario) return { entries: [] as [string, number][], max: 1 };
     const byTicker: Record<string, number> = {};
     positions.forEach((p) => {
-      const r = applyScenario(p, focusedScenario);
+      const r = applyScenario(p, draftScenario);
       byTicker[p.ticker] = (byTicker[p.ticker] ?? 0) + r.delta;
     });
     const entries = Object.entries(byTicker).sort((a, b) => a[1] - b[1]);
     const attMax = Math.max(...entries.map((e) => Math.abs(e[1])), 1);
     return { entries, max: attMax };
-  }, [positions, focusedScenario]);
+  }, [positions, draftScenario]);
 
   const portfolioImpact = useMemo(() => {
-    if (!focusedScenario) return 0;
+    if (!draftScenario) return 0;
     return positions.reduce(
-      (sum, p) => sum + applyScenario(p, focusedScenario).delta,
+      (sum, p) => sum + applyScenario(p, draftScenario).delta,
       0,
     );
-  }, [positions, focusedScenario]);
+  }, [positions, draftScenario]);
 
-  const shockEntries = focusedScenario
-    ? (Object.entries(focusedScenario.underlying_shocks) as [string, ShockRule][])
+  const shockEntries = draftScenario
+    ? (Object.entries(draftScenario.underlying_shocks) as [string, ShockRule][])
     : [];
 
   const scenarioCountPresets = scenarios.filter((s) => s.is_preset).length;
   const scenarioCountUser = scenarios.filter((s) => !s.is_preset).length;
+
+  async function createScenario() {
+    const ticker = positions[0]?.ticker;
+    const body = {
+      name: ticker ? `${ticker} stress` : "New scenario",
+      description: "Custom portfolio stress",
+      default_shock: { mode: "pct", val: -5 },
+      underlying_shocks: ticker ? { [ticker]: { mode: "pct", val: -5 } } : {},
+      advance_days: 0,
+      interest_rate: 0.045,
+    };
+    const res = await fetch("/api/scenarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const created = await res.json() as Scenario;
+      setFocusedId(created.id);
+      setActiveIds((prev) => [...prev, created.id]);
+      await onRefresh();
+    }
+  }
+
+  async function duplicateScenario() {
+    if (!draftScenario) return;
+    const res = await fetch("/api/scenarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...draftScenario,
+        id: undefined,
+        is_preset: undefined,
+        name: `${draftScenario.name} copy`,
+      }),
+    });
+    if (res.ok) {
+      const created = await res.json() as Scenario;
+      setFocusedId(created.id);
+      setActiveIds((prev) => [...prev, created.id]);
+      await onRefresh();
+    }
+  }
+
+  async function saveScenario() {
+    if (!draftScenario) return;
+    if (draftScenario.is_preset) {
+      await duplicateScenario();
+      return;
+    }
+    const res = await fetch(`/api/scenarios/${draftScenario.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: draftScenario.name,
+        description: draftScenario.description,
+        target_date: draftScenario.target_date,
+        underlying_shocks: draftScenario.underlying_shocks,
+        default_shock: draftScenario.default_shock,
+        iv_shock: draftScenario.iv_shock,
+        advance_days: draftScenario.advance_days,
+        interest_rate: draftScenario.interest_rate,
+        notes: draftScenario.notes,
+      }),
+    });
+    if (res.ok) await onRefresh();
+  }
+
+  function shareScenario() {
+    if (!draftScenario) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("scenario", draftScenario.id);
+    void navigator.clipboard.writeText(url.toString());
+  }
+
+  function updateShock(ticker: string, patch: Partial<ShockRule>) {
+    setDraftScenario((prev) => {
+      if (!prev) return prev;
+      const current = prev.underlying_shocks[ticker] ?? { mode: "pct", val: -5 };
+      return {
+        ...prev,
+        underlying_shocks: {
+          ...prev.underlying_shocks,
+          [ticker]: { ...current, ...patch },
+        },
+      };
+    });
+  }
+
+  function removeShock(ticker: string) {
+    setDraftScenario((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev.underlying_shocks };
+      delete next[ticker];
+      return { ...prev, underlying_shocks: next };
+    });
+  }
+
+  function addTickerShock() {
+    const ticker = positions.find((p) => draftScenario && !draftScenario.underlying_shocks[p.ticker])?.ticker;
+    if (!ticker) return;
+    updateShock(ticker, { mode: "pct", val: -5 });
+  }
 
   return (
     <section>
@@ -122,7 +239,9 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
               </button>
             ))}
           </div>
-          <button className={`${styles.btn} ${styles.btnPrimary}`}>+ New scenario</button>
+          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={createScenario}>
+            + New scenario
+          </button>
         </div>
       </div>
 
@@ -152,7 +271,7 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                 </button>
               ))}
             </div>
-            <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}>
+            <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={shareScenario}>
               Share scenario →
             </button>
           </div>
@@ -268,7 +387,11 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                               style={{ background: bg, color: tx }}
                               title={fmtDollar(r.delta)}
                             >
-                              {fmtDollar(r.delta)}
+                              {gridMode === "pct"
+                                ? fmtPct(pct)
+                                : gridMode === "delta"
+                                  ? `${r.newPx.toFixed(2)} / ${fmtDollar(r.delta)}`
+                                  : fmtDollar(r.delta)}
                               <span className={styles.heatPct}>{fmtPct(pct)}</span>
                             </span>
                           </td>
@@ -310,22 +433,29 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
       </div>
 
       {/* Builder + impact summary */}
-      {focusedScenario && (
+      {draftScenario && (
         <div className={styles.builderRow}>
           <div className={styles.card}>
             <div className={styles.cardHdr}>
               <div>
-                <div className={styles.cardTitle}>{focusedScenario.name}</div>
+                <input
+                  className={styles.valInput}
+                  value={draftScenario.name}
+                  onChange={(e) =>
+                    setDraftScenario((prev) => prev ? { ...prev, name: e.target.value } : prev)
+                  }
+                  style={{ width: 220, textAlign: "left", fontSize: 14, fontWeight: 700 }}
+                />
                 <div className={styles.cardSub}>
-                  {focusedScenario.is_preset ? "system preset" : "personal"} ·{" "}
+                  {draftScenario.is_preset ? "system preset" : "personal"} ·{" "}
                   {positions.length} positions affected
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Duplicate</button>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Share URL</button>
-                <button className={`${styles.btn} ${styles.btnSm} ${styles.btnPrimary}`}>
-                  Save changes
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={duplicateScenario}>Duplicate</button>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={shareScenario}>Share URL</button>
+                <button className={`${styles.btn} ${styles.btnSm} ${styles.btnPrimary}`} onClick={saveScenario}>
+                  {draftScenario.is_preset ? "Save as copy" : "Save changes"}
                 </button>
               </div>
             </div>
@@ -351,7 +481,12 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                       fontSize: 12,
                       textAlign: "left",
                     }}
-                    defaultValue={focusedScenario.target_date ?? ""}
+                    value={draftScenario.target_date ?? ""}
+                    onChange={(e) =>
+                      setDraftScenario((prev) =>
+                        prev ? { ...prev, target_date: e.target.value || null } : prev,
+                      )
+                    }
                   />
                 </div>
                 <div>
@@ -362,7 +497,20 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                     <select
                       className={styles.modeSel}
                       style={{ height: 30, flex: "0 0 88px", fontSize: 12 }}
-                      defaultValue={focusedScenario.iv_shock?.mode ?? "mult"}
+                      value={draftScenario.iv_shock?.mode ?? "mult"}
+                      onChange={(e) =>
+                        setDraftScenario((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                iv_shock: {
+                                  mode: e.target.value as "mult" | "add" | "abs",
+                                  val: prev.iv_shock?.val ?? 1,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
                     >
                       <option value="mult">×</option>
                       <option value="add">+%</option>
@@ -371,7 +519,20 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                     <input
                       className={styles.valInput}
                       style={{ height: 30, flex: 1, fontSize: 12 }}
-                      defaultValue={focusedScenario.iv_shock?.val.toFixed(2) ?? "1.00"}
+                      value={draftScenario.iv_shock?.val.toString() ?? "1"}
+                      onChange={(e) =>
+                        setDraftScenario((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                iv_shock: {
+                                  mode: prev.iv_shock?.mode ?? "mult",
+                                  val: Number.parseFloat(e.target.value) || 0,
+                                },
+                              }
+                            : prev,
+                        )
+                      }
                     />
                   </div>
                 </div>
@@ -406,7 +567,15 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                         <span className={styles.shockTk}>{tk}</span>
                         <select
                           className={styles.modeSel}
-                          defaultValue={sh.mode === "pct" ? "percent" : "absolute"}
+                          value={sh.mode === "pct" ? "percent" : sh.mode === "pin" ? "pin strike" : "absolute"}
+                          onChange={(e) => {
+                            const mode = e.target.value === "percent"
+                              ? "pct"
+                              : e.target.value === "pin strike"
+                                ? "pin"
+                                : "abs";
+                            updateShock(tk, { mode });
+                          }}
                         >
                           <option>percent</option>
                           <option>absolute</option>
@@ -414,14 +583,17 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                         </select>
                         <input
                           className={styles.valInput}
-                          defaultValue={`${sh.val}${sh.mode === "pct" ? "%" : ""}`}
+                          value={String(sh.val)}
+                          onChange={(e) =>
+                            updateShock(tk, { val: Number.parseFloat(e.target.value) || 0 })
+                          }
                         />
                         <span
                           className={`${styles.shockPreview} ${deltaPct > 0 ? styles.shockPreviewPos : styles.shockPreviewNeg}`}
                         >
                           {pos ? `$${curPx.toFixed(2)} → $${newPx.toFixed(2)}` : "—"}
                         </span>
-                        <button className={styles.rmBtn}>×</button>
+                        <button className={styles.rmBtn} onClick={() => removeShock(tk)}>×</button>
                       </div>
                     );
                   })
@@ -436,7 +608,7 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                   alignItems: "center",
                 }}
               >
-                <button className={`${styles.btn} ${styles.btnSm}`}>+ Add ticker shock</button>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={addTickerShock}>+ Add ticker shock</button>
                 <div
                   style={{
                     marginLeft: "auto",
@@ -452,7 +624,23 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                   <select
                     className={styles.modeSel}
                     style={{ height: 26, fontSize: 11 }}
-                    defaultValue={focusedScenario.default_shock?.mode ?? "pct"}
+                    value={draftScenario.default_shock?.mode ?? "pct"}
+                    onChange={(e) =>
+                      setDraftScenario((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              default_shock:
+                                e.target.value === "none"
+                                  ? null
+                                  : {
+                                      mode: e.target.value as "pct" | "abs",
+                                      val: prev.default_shock?.val ?? 0,
+                                    },
+                            }
+                          : prev,
+                      )
+                    }
                   >
                     <option value="pct">percent</option>
                     <option value="abs">absolute</option>
@@ -461,12 +649,25 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                   <input
                     className={styles.valInput}
                     style={{ height: 26, width: 60, fontSize: 11 }}
-                    defaultValue={focusedScenario.default_shock?.val.toString() ?? "0"}
+                    value={draftScenario.default_shock?.val.toString() ?? "0"}
+                    onChange={(e) =>
+                      setDraftScenario((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              default_shock: {
+                                mode: prev.default_shock?.mode ?? "pct",
+                                val: Number.parseFloat(e.target.value) || 0,
+                              },
+                            }
+                          : prev,
+                      )
+                    }
                   />
                 </div>
               </div>
 
-              {focusedScenario.notes && (
+              {draftScenario.notes && (
                 <div
                   style={{
                     marginTop: 14,
@@ -487,7 +688,7 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                       fontFamily: "var(--font-mono), monospace",
                     }}
                   >
-                    {focusedScenario.notes}
+                    {draftScenario.notes}
                   </div>
                 </div>
               )}
@@ -527,7 +728,7 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                       : ([...positions]
                           .map((p) => ({
                             p,
-                            d: applyScenario(p, focusedScenario).delta,
+                            d: applyScenario(p, draftScenario).delta,
                           }))
                           .sort((a, b) => a.d - b.d)[0]?.p.name ?? "—")}
                   </div>
@@ -540,7 +741,7 @@ export function Scenarios({ positions, scenarios }: ScenariosProps) {
                       : ([...positions]
                           .map((p) => ({
                             p,
-                            d: applyScenario(p, focusedScenario).delta,
+                            d: applyScenario(p, draftScenario).delta,
                           }))
                           .sort((a, b) => b.d - a.d)[0]?.p.name ?? "—")}
                   </div>
