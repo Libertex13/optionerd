@@ -59,9 +59,12 @@ export function useOptionChains(
 
   useEffect(() => {
     if (unique.length === 0) return;
-    void fetchAll(unique);
+    const firstId = setTimeout(() => void fetchAll(unique), 0);
     const id = setInterval(() => void fetchAll(unique), intervalMs);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(firstId);
+      clearInterval(id);
+    };
   }, [key, intervalMs, unique, fetchAll]);
 
   // Only expose chains for currently-requested tickers so the consumer

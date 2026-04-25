@@ -14,7 +14,6 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
   const [results, setResults] = useState<TickerSearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -42,7 +41,6 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
 
   const handleInputChange = (value: string) => {
     setQuery(value.toUpperCase());
-    setSelectedName(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(value), 300);
   };
@@ -50,7 +48,6 @@ export function TickerSearch({ onSelect, selectedTicker }: TickerSearchProps) {
   const handleSelect = (ticker: string) => {
     const name = results.find((r) => r.ticker === ticker)?.name ?? undefined;
     setQuery(ticker);
-    setSelectedName(name ?? null);
     setIsOpen(false);
     onSelect(ticker, name);
   };

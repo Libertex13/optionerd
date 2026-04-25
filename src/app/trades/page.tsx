@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSavedTrades } from "@/hooks/useSavedTrades";
 import { AuthModal } from "@/components/auth/AuthModal";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import type { SavedTrade } from "@/lib/supabase/types";
 import Link from "next/link";
 

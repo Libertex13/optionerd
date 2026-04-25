@@ -205,8 +205,8 @@ function ScenarioShell({
         <OverviewChart
           config={config}
           underlying={underlying}
-          breakEven={breakEven}
           activeDate={activeMoment?.date ?? null}
+          breakEven={breakEven}
           onJumpToMoment={jumpToMoment}
         />
       </div>
@@ -223,7 +223,6 @@ function ScenarioShell({
             underlying={underlying}
             entryClose={entryClose}
             pnlSeries={pnlSeries}
-            breakEven={breakEven}
           />
         ))}
       </div>

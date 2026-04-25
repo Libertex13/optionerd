@@ -17,7 +17,6 @@ import { GreeksDisplay } from "./GreeksDisplay";
 import { MixedExpiryScenarioPanel } from "./MixedExpiryScenarioPanel";
 import { SaveTradeButton } from "./SaveTradeButton";
 import { ShareTradeButton } from "./ShareTradeButton";
-import { StrategyPicker } from "./StrategyPicker";
 import { TemplateStrip } from "./TemplateStrip";
 import { TimeSlider } from "./TimeSlider";
 import { MaxPainDisplay } from "./MaxPainDisplay";

@@ -39,7 +39,8 @@ export function usePlan(): UsePlanReturn {
   }, [user]);
 
   useEffect(() => {
-    fetchPlan();
+    const id = setTimeout(fetchPlan, 0);
+    return () => clearTimeout(id);
   }, [fetchPlan]);
 
   // Re-fetch when tab regains focus (e.g., returning from Stripe checkout)

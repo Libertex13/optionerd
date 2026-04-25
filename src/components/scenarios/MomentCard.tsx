@@ -24,7 +24,6 @@ type MomentCardProps = {
   /** Underlying close on the first decision date (entry), for "Δ from entry". */
   entryClose: number | null;
   pnlSeries: PnLPoint[];
-  breakEven: number | null;
 };
 
 const kindLabel: Record<MomentKind, string> = {
@@ -43,7 +42,6 @@ export function MomentCard({
   underlying,
   entryClose,
   pnlSeries,
-  breakEven,
 }: MomentCardProps) {
   const { legs, underlying: momentCandle, pnl, pnlPct, dte, daysFromEntry, distToBE, costBasis } =
     snapshot;

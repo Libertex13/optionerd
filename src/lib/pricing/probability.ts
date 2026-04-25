@@ -31,19 +31,6 @@ function probabilityAbove(
   return cumulativeNormalDistribution(d2);
 }
 
-/**
- * Calculate the probability that the stock price ends below a given level.
- */
-function probabilityBelow(
-  spotPrice: number,
-  targetPrice: number,
-  volatility: number,
-  timeToExpiry: number,
-  riskFreeRate: number,
-): number {
-  return 1 - probabilityAbove(spotPrice, targetPrice, volatility, timeToExpiry, riskFreeRate);
-}
-
 function profitAtSpot(
   payoffPoints: PayoffPoint[],
   spotPrice: number,

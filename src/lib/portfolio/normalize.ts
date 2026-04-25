@@ -157,6 +157,9 @@ export function applyLiveMarks(
       px: livePx,
       pxLive: true,
       markSource: "chain",
+      quoteSource: chain.quoteSource,
+      quoteDelayMinutes: chain.quoteDelayMinutes,
+      quoteFetchedAt: chain.quoteFetchedAt,
       pnl: pos.state === "closed" ? pos.pnl : stockPnl,
       pnlPct:
         pos.cost > 0
@@ -242,6 +245,9 @@ export function applyLiveMarks(
     px: livePx > 0 ? livePx : pos.px,
     pxLive: livePx > 0,
     markSource: livePx > 0 ? "chain" : pos.markSource,
+    quoteSource: chain.quoteSource,
+    quoteDelayMinutes: chain.quoteDelayMinutes,
+    quoteFetchedAt: chain.quoteFetchedAt,
     legs,
     pnl,
     pnlPct,

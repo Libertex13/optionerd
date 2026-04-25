@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { calculateMaxPain } from "@/lib/pricing/max-pain";
-import type { OIByStrike } from "@/lib/pricing/max-pain";
 import { formatCurrency, formatCompactCurrency, formatVolume } from "@/lib/utils/formatting";
 import type { OptionChainExpiry } from "@/types/market";
 
@@ -199,9 +198,12 @@ export function MaxPainDisplay({
 
   // If the default expiry changes (user selects a different leg expiry), follow it
   useEffect(() => {
-    if (defaultExpiry && expirations.some((e) => e.expirationDate === defaultExpiry)) {
-      setSelectedExpiry(defaultExpiry);
-    }
+    const id = setTimeout(() => {
+      if (defaultExpiry && expirations.some((e) => e.expirationDate === defaultExpiry)) {
+        setSelectedExpiry(defaultExpiry);
+      }
+    }, 0);
+    return () => clearTimeout(id);
   }, [defaultExpiry, expirations]);
 
   // Find the selected expiry data

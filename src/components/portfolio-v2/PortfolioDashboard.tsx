@@ -28,8 +28,11 @@ export function PortfolioDashboard() {
   const { scenarios, loading: scnLoading } = useScenarios();
 
   useEffect(() => {
-    const stored = localStorage.getItem("pf-tab");
-    if (stored === "live" || stored === "scenarios") setTab(stored);
+    const id = setTimeout(() => {
+      const stored = localStorage.getItem("pf-tab");
+      if (stored === "live" || stored === "scenarios") setTab(stored);
+    }, 0);
+    return () => clearTimeout(id);
   }, []);
 
   useEffect(() => {
@@ -45,10 +48,10 @@ export function PortfolioDashboard() {
   const tickAgoSec = lastTick ? Math.max(0, Math.round((now - lastTick) / 1000)) : null;
   const liveLabel =
     positions.length === 0
-      ? "Live · no positions"
+      ? "Delayed · no positions"
       : tickAgoSec == null
-        ? "Live · connecting…"
-        : `Live · ${liveCoverage.live}/${liveCoverage.total} · last tick ${tickAgoSec}s ago`;
+        ? "Delayed · connecting…"
+        : `Delayed · ${liveCoverage.live}/${liveCoverage.total} · refreshed ${tickAgoSec}s ago`;
 
   return (
     <>
@@ -110,7 +113,7 @@ export function PortfolioDashboard() {
           <div className={styles.note}>
             <strong>Dashboard.</strong> Live Positions tracks open P/L, Greeks,
             expiries. Scenarios stress-test your book against presets or custom
-            scenarios. Live market data hooks up with brokerage integration.
+            scenarios. Current marks use delayed market data until brokerage integration is connected.
           </div>
         )}
 

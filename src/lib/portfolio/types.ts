@@ -112,8 +112,11 @@ export interface PortfolioPosition {
   strat: string;
   ticker: string;
   px: number;           // current underlying (live if feed available, else entry)
-  pxLive: boolean;      // true when px comes from a live quote
+  pxLive: boolean;      // true when px comes from a market-data quote
   markSource: "entry" | "chain" | "bs-fallback";
+  quoteSource?: "nasdaq" | "optionwatch";
+  quoteDelayMinutes?: number;
+  quoteFetchedAt?: number;
   legs: PortfolioLeg[];
   stockLeg: PositionStockLeg | null;
   net: number;          // credit (+) / debit (−) in dollars

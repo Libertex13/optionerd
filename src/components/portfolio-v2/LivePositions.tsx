@@ -396,10 +396,10 @@ function PositionRow({
   const p = position;
   const isEstimated = p.markSource === "bs-fallback";
   const markLabel = !p.pxLive
-    ? "awaiting live feed"
+    ? "awaiting delayed feed"
     : isEstimated
-      ? "estimated from live underlying"
-      : "marked to live";
+      ? "estimated from delayed underlying"
+      : `marked to ${p.quoteDelayMinutes ?? 15}m delayed ${p.quoteSource ?? "chain"}`;
   const netPrefix = p.net >= 0 ? "+" : "−";
   const canShowLivePnl = p.pxLive && p.state !== "watching";
   const displayPnl = p.state === "closed" ? p.pnl : canShowLivePnl ? p.pnl : 0;
@@ -455,7 +455,7 @@ function PositionRow({
           {p.ticker}
           <span className={styles.tkPx}>
             {p.px > 0 ? `$${p.px.toFixed(2)}` : "—"}
-            {p.pxLive && <span className={styles.liveDot} aria-label="live" />}
+            {p.pxLive && <span className={styles.liveDot} aria-label="delayed quote" />}
             {isEstimated && <span className={styles.markBadge}>EST.</span>}
           </span>
         </div>
@@ -521,7 +521,7 @@ function PositionRow({
                 live={p.pxLive}
               />
               <div className={styles.microLabel} style={{ margin: "14px 0 5px" }}>
-                Greeks {p.pxLive ? (isEstimated ? "· est." : "") : "· awaiting feed"}
+                Greeks {p.pxLive ? (isEstimated ? "· est." : "· delayed") : "· awaiting feed"}
               </div>
               <div className={styles.statRow}>
                 <div>
@@ -746,7 +746,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
               {hasLive ? signedDollar(agg.theta, 0) : "—"}
             </div>
             <div className={styles.sumDelta}>
-              {hasLive ? "per calendar day" : "awaiting live feed"}
+              {hasLive ? "per calendar day" : "awaiting delayed feed"}
             </div>
           </div>
           <div>
@@ -773,7 +773,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
                 : hasLive
                   ? `${livePositions.length}/${positions.length} live`
                   : liveCount === 0
-                    ? "awaiting live feed"
+                    ? "awaiting delayed feed"
                     : "no open positions"}
             </span>
           </div>

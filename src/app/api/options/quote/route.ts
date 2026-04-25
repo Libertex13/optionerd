@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getStockPrice } from "@/lib/massive/client";
+import { fetchNasdaqSpot } from "@/lib/quotes/nasdaq";
 import type { StockQuote } from "@/types/market";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get("ticker")?.toUpperCase();
 
-  if (!ticker || !/^[A-Z]{1,5}$/.test(ticker)) {
+  if (!ticker || !/^[A-Z]{1,6}$/.test(ticker)) {
     return NextResponse.json(
       { error: "Invalid or missing ticker parameter" },
       { status: 400 },
@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const price = await getStockPrice(ticker);
+    const price = await fetchNasdaqSpot(ticker);
+    if (!(price > 0)) throw new Error(`No delayed stock quote available for ${ticker}`);
 
     const quote: StockQuote = {
       ticker,

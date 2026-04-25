@@ -41,6 +41,9 @@ export interface OptionChain {
   ticker: string;
   underlyingPrice: number;
   expirations: OptionChainExpiry[];
+  quoteSource?: "nasdaq" | "optionwatch";
+  quoteDelayMinutes?: number;
+  quoteFetchedAt?: number;
 }
 
 export interface TickerSearchResult {

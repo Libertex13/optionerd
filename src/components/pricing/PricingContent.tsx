@@ -95,10 +95,11 @@ export function PricingContent() {
   const [plan, setPlan] = useState<Plan>("casual");
 
   useEffect(() => {
-    if (!user) {
-      setPlan("casual");
-      return;
-    }
+    const id = setTimeout(() => {
+      if (!user) setPlan("casual");
+    }, 0);
+    if (!user) return () => clearTimeout(id);
+
     const supabase = createClient();
     supabase
       .from("profiles")
@@ -108,6 +109,7 @@ export function PricingContent() {
       .then(({ data }: { data: { plan: string } | null }) => {
         if (data?.plan) setPlan(data.plan as Plan);
       });
+    return () => clearTimeout(id);
   }, [user]);
 
   const isNerd = plan === "nerd";

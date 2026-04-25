@@ -36,13 +36,16 @@ export function MixedExpiryScenarioPanel({
   );
 
   useEffect(() => {
-    setTargets((prev) => {
-      const next: Record<string, string> = {};
-      for (const step of expiryInfo) {
-        next[step.expirationDate] = prev[step.expirationDate] ?? defaultTargets[step.expirationDate]?.toFixed(2) ?? "";
-      }
-      return next;
-    });
+    const id = setTimeout(() => {
+      setTargets((prev) => {
+        const next: Record<string, string> = {};
+        for (const step of expiryInfo) {
+          next[step.expirationDate] = prev[step.expirationDate] ?? defaultTargets[step.expirationDate]?.toFixed(2) ?? "";
+        }
+        return next;
+      });
+    }, 0);
+    return () => clearTimeout(id);
   }, [defaultTargets, expiryInfo]);
 
   const numericTargets = useMemo(
