@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { OptionChain } from "@/types/market";
 
 interface State {
@@ -28,44 +28,44 @@ export function useOptionChains(
   const key = unique.join(",");
 
   const [chains, setChains] = useState<Record<string, OptionChain>>({});
-  const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-
-  const fetchAll = useCallback(async (targets: string[]) => {
-    if (targets.length === 0) return;
-    setLoading(true);
-    const entries = await Promise.all(
-      targets.map(async (t) => {
-        try {
-          const r = await fetch(
-            `/api/options/chain?ticker=${encodeURIComponent(t)}`,
-          );
-          if (!r.ok) return [t, null] as const;
-          const chain = (await r.json()) as OptionChain;
-          return [t, chain] as const;
-        } catch {
-          return [t, null] as const;
-        }
-      }),
-    );
-    setChains((prev) => {
-      const next = { ...prev };
-      for (const [t, c] of entries) if (c) next[t] = c;
-      return next;
-    });
-    setLastUpdated(Date.now());
-    setLoading(false);
-  }, []);
 
   useEffect(() => {
     if (unique.length === 0) return;
-    const firstId = setTimeout(() => void fetchAll(unique), 0);
-    const id = setInterval(() => void fetchAll(unique), intervalMs);
+    let cancelled = false;
+
+    const fetchTargets = () => {
+      void Promise.all(
+        unique.map(async (t) => {
+          try {
+            const r = await fetch(
+              `/api/options/chain?ticker=${encodeURIComponent(t)}`,
+            );
+            if (!r.ok) return [t, null] as const;
+            const chain = (await r.json()) as OptionChain;
+            return [t, chain] as const;
+          } catch {
+            return [t, null] as const;
+          }
+        }),
+      ).then((entries) => {
+        if (cancelled) return;
+        setChains((prev) => {
+          const next = { ...prev };
+          for (const [t, c] of entries) if (c) next[t] = c;
+          return next;
+        });
+        setLastUpdated(Date.now());
+      });
+    };
+
+    fetchTargets();
+    const id = setInterval(fetchTargets, intervalMs);
     return () => {
-      clearTimeout(firstId);
+      cancelled = true;
       clearInterval(id);
     };
-  }, [key, intervalMs, unique, fetchAll]);
+  }, [key, intervalMs, unique]);
 
   // Only expose chains for currently-requested tickers so the consumer
   // doesn't see stale entries for tickers that have been removed.
@@ -75,5 +75,5 @@ export function useOptionChains(
     return out;
   }, [chains, unique]);
 
-  return { chains: activeChains, loading, lastUpdated };
+  return { chains: activeChains, loading: false, lastUpdated };
 }

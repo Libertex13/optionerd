@@ -95,24 +95,26 @@ export function PricingContent() {
   const [plan, setPlan] = useState<Plan>("casual");
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      if (!user) setPlan("casual");
-    }, 0);
-    if (!user) return () => clearTimeout(id);
+    if (!user) return;
 
     const supabase = createClient();
+    let cancelled = false;
     supabase
       .from("profiles")
       .select("plan")
       .eq("id", user.id)
       .single()
       .then(({ data }: { data: { plan: string } | null }) => {
+        if (cancelled) return;
         if (data?.plan) setPlan(data.plan as Plan);
       });
-    return () => clearTimeout(id);
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
-  const isNerd = plan === "nerd";
+  const effectivePlan = user ? plan : "casual";
+  const isNerd = effectivePlan === "nerd";
 
   const handleUpgrade = () => {
     if (isNerd) {

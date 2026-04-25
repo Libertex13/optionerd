@@ -16,14 +16,10 @@ interface UsePlanReturn {
 export function usePlan(): UsePlanReturn {
   const { user } = useAuth();
   const [plan, setPlan] = useState<Plan>("casual");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const fetchPlan = useCallback(() => {
-    if (!user) {
-      setPlan("casual");
-      setLoading(false);
-      return;
-    }
+    if (!user) return;
 
     setLoading(true);
     const supabase = createClient();
@@ -39,9 +35,23 @@ export function usePlan(): UsePlanReturn {
   }, [user]);
 
   useEffect(() => {
-    const id = setTimeout(fetchPlan, 0);
-    return () => clearTimeout(id);
-  }, [fetchPlan]);
+    if (!user) return;
+    const supabase = createClient();
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }: { data: { plan: string } | null }) => {
+        if (cancelled) return;
+        setPlan((data?.plan as Plan) ?? "casual");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Re-fetch when tab regains focus (e.g., returning from Stripe checkout)
   useEffect(() => {
@@ -55,10 +65,10 @@ export function usePlan(): UsePlanReturn {
   }, [fetchPlan, user]);
 
   return {
-    plan,
-    loading,
-    isNerd: plan === "nerd",
-    isCasual: plan === "casual",
+    plan: user ? plan : "casual",
+    loading: user ? loading : false,
+    isNerd: user ? plan === "nerd" : false,
+    isCasual: user ? plan === "casual" : true,
     refresh: fetchPlan,
   };
 }

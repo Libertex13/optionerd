@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Position, PortfolioPosition } from "@/lib/portfolio/types";
 import { applyLiveMarks, normalizePosition } from "@/lib/portfolio/normalize";
 import { useOptionChains } from "@/hooks/useOptionChains";
+import type { OptionChain } from "@/types/market";
 
 interface UsePositionsReturn {
   positions: PortfolioPosition[];
@@ -14,6 +15,7 @@ interface UsePositionsReturn {
   refresh: () => Promise<void>;
   lastTick: number | null;
   liveCoverage: { live: number; total: number };
+  chains: Record<string, OptionChain>;
 }
 
 export function usePositions(): UsePositionsReturn {
@@ -78,5 +80,6 @@ export function usePositions(): UsePositionsReturn {
     refresh,
     lastTick: lastUpdated,
     liveCoverage,
+    chains,
   };
 }
