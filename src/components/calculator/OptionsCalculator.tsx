@@ -15,6 +15,7 @@ import { PayoffDiagram } from "./PayoffDiagram";
 import { PnLHeatmap } from "./PnLHeatmap";
 import { GreeksDisplay } from "./GreeksDisplay";
 import { MixedExpiryScenarioPanel } from "./MixedExpiryScenarioPanel";
+import { SavePositionButton } from "./SavePositionButton";
 import { SaveTradeButton } from "./SaveTradeButton";
 import { ShareTradeButton } from "./ShareTradeButton";
 import { TemplateStrip } from "./TemplateStrip";
@@ -1329,7 +1330,7 @@ export function OptionsCalculator({
                   </button>
                 )}
               </div>
-              {chain && legs.length > 0 && (() => {
+              {chain && (legs.length > 0 || stockLeg) && (() => {
                 const tradeLegs = legs.map((l) => ({
                   option_type: l.optionType,
                   position_type: l.positionType,
@@ -1347,6 +1348,12 @@ export function OptionsCalculator({
                 return (
                   <div className="flex items-center gap-3">
                     <ShareTradeButton
+                      ticker={chain.ticker}
+                      underlyingPrice={chain.underlyingPrice}
+                      legs={tradeLegs}
+                      stockLeg={tradeStockLeg}
+                    />
+                    <SavePositionButton
                       ticker={chain.ticker}
                       underlyingPrice={chain.underlyingPrice}
                       legs={tradeLegs}

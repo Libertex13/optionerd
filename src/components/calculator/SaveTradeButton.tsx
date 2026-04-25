@@ -39,9 +39,15 @@ export function SaveTradeButton({
       return;
     }
     // Default name from the position
-    const legDesc = legs.map(
+    const optionDesc = legs.map(
       (l) => `${l.position_type === "long" ? "B" : "S"} ${l.option_type[0].toUpperCase()}${l.strike_price}`,
-    ).join(" / ");
+    );
+    const legDesc = [
+      ...(stockLeg
+        ? [`${stockLeg.position_type === "long" ? "Long" : "Short"} ${stockLeg.quantity} shares`]
+        : []),
+      ...optionDesc,
+    ].join(" / ");
     setName(`${ticker} ${legDesc}`);
     setShowNameInput(true);
     setError("");
