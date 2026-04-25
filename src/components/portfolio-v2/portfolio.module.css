@@ -216,13 +216,16 @@
   padding: 20px 22px;
   background: var(--card);
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
   gap: 20px;
-  align-items: center;
+  align-items: stretch;
 }
 .sumPnl > div {
   border-right: 1px solid var(--border);
   padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 .sumPnl > div:last-child { border-right: 0; padding-right: 0; }
 .sumK {
