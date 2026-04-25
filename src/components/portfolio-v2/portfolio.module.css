@@ -361,7 +361,7 @@
 }
 .posHead {
   display: grid;
-  grid-template-columns: 18px 80px 1.4fr 1fr 120px 120px 84px 84px;
+  grid-template-columns: 18px 80px 1fr 1.6fr 120px 120px 84px 84px;
   align-items: center;
   padding: 14px 18px;
   background: color-mix(in oklch, var(--background) 40%, var(--card));
@@ -400,7 +400,7 @@
 .posRowWrap:last-child { border-bottom: 0; }
 .posRow {
   display: grid;
-  grid-template-columns: 18px 80px 1.4fr 1fr 120px 120px 84px 84px;
+  grid-template-columns: 18px 80px 1fr 1.6fr 120px 120px 84px 84px;
   align-items: center;
   padding: 11px 18px;
   cursor: pointer;
@@ -452,11 +452,62 @@
 
 .legChips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 3px;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
+.legRow {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.legSide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+.legSideLong {
+  color: #22c55e;
+  border-color: oklch(0.65 0.18 150 / 0.55);
+  background: oklch(0.65 0.18 150 / 0.1);
+}
+.legSideShort {
+  color: #ef4444;
+  border-color: oklch(0.65 0.18 25 / 0.55);
+  background: oklch(0.65 0.18 25 / 0.1);
+}
+.legSpec {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+.legPrices {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.legPriceArrow {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+.legPriceMark {
+  color: var(--foreground);
+  font-weight: 600;
+}
+/* Legacy chip styles retained for LegDetailTable */
 .legChip {
   padding: 2px 6px;
   border: 1px solid var(--border);
@@ -465,6 +516,8 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10.5px;
 }
 .legChipShort {
   border-color: oklch(0.42 0.15 25 / 0.5);
@@ -477,6 +530,29 @@
 .legChipS { font-weight: 700; }
 .legChipSLong { color: #22c55e; }
 .legChipSShort { color: #ef4444; }
+.legSummary {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.legSummaryItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legSummaryDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+.legSummaryDotCall { background: oklch(0.65 0.18 250 / 0.7); }
+.legSummaryDotPut { background: oklch(0.65 0.18 30 / 0.7); }
+.legSummaryDotStock { background: oklch(0.65 0.05 0 / 0.5); }
 
 .monoNum {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -517,7 +593,7 @@
 
 .tickerGroupHeader {
   display: grid;
-  grid-template-columns: 18px 80px 1.4fr 1fr 120px 120px 84px 84px;
+  grid-template-columns: 18px 80px 1fr 1.6fr 120px 120px 84px 84px;
   align-items: center;
   padding: 12px 18px 12px 15px;
   background: color-mix(in oklch, var(--foreground) 4%, var(--card));

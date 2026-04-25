@@ -224,41 +224,106 @@ function stateBadgeClass(st: PositionState): string {
   return `${styles.stateBadge} ${map[st]}`;
 }
 
+function fmtLegPrice(n: number) {
+  return `$${n.toFixed(2)}`;
+}
+
 function LegChips({
   legs,
+  marks,
   stockLeg,
+  underlyingPrice,
+  pxLive,
 }: {
   legs: PortfolioLeg[];
+  marks: LegMark[];
   stockLeg: PositionStockLeg | null;
+  underlyingPrice: number;
+  pxLive: boolean;
 }) {
+  const stockMarkAvailable = pxLive && underlyingPrice > 0;
   return (
     <div className={styles.legChips}>
       {stockLeg && (
-        <span
-          className={`${styles.legChip} ${
-            stockLeg.side === "long" ? styles.legChipLong : styles.legChipShort
-          }`}
-        >
-          <span className={`${styles.legChipS} ${stockLeg.side === "long" ? styles.legChipSLong : styles.legChipSShort}`}>
-            {stockLeg.side === "long" ? "B" : "S"}
+        <div className={styles.legRow}>
+          <span
+            className={`${styles.legSide} ${stockLeg.side === "long" ? styles.legSideLong : styles.legSideShort}`}
+          >
+            {stockLeg.side === "long" ? "Long" : "Short"}
           </span>
-          {stockLeg.quantity} SH
+          <span className={styles.legSpec}>
+            {stockLeg.quantity} sh
+          </span>
+          <span className={styles.legPrices}>
+            <span>{fmtLegPrice(stockLeg.entry_price)}</span>
+            <span className={styles.legPriceArrow}>→</span>
+            <span className={stockMarkAvailable ? styles.legPriceMark : ""}>
+              {stockMarkAvailable ? fmtLegPrice(underlyingPrice) : "—"}
+            </span>
+          </span>
+        </div>
+      )}
+      {legs.map((l, i) => {
+        const mark = marks[i];
+        const markAvailable = pxLive && !!mark;
+        return (
+          <div key={i} className={styles.legRow}>
+            <span
+              className={`${styles.legSide} ${l.s === "long" ? styles.legSideLong : styles.legSideShort}`}
+            >
+              {l.s === "long" ? "Long" : "Short"}
+            </span>
+            <span className={styles.legSpec}>
+              {l.q} {l.t === "call" ? "Call" : "Put"} {l.k}
+            </span>
+            <span className={styles.legPrices}>
+              <span>{fmtLegPrice(l.p)}</span>
+              <span className={styles.legPriceArrow}>→</span>
+              <span className={markAvailable ? styles.legPriceMark : ""}>
+                {markAvailable ? fmtLegPrice(mark.value) : "—"}
+              </span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LegSummary({ items }: { items: PortfolioPosition[] }) {
+  let calls = 0;
+  let puts = 0;
+  let shares = 0;
+  for (const p of items) {
+    for (const l of p.legs) {
+      if (l.t === "call") calls += l.q;
+      else puts += l.q;
+    }
+    if (p.stockLeg) shares += p.stockLeg.quantity;
+  }
+  if (calls === 0 && puts === 0 && shares === 0) {
+    return <div className={styles.legSummary}>—</div>;
+  }
+  return (
+    <div className={styles.legSummary}>
+      {calls > 0 && (
+        <span className={styles.legSummaryItem}>
+          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotCall}`} />
+          {calls} {calls === 1 ? "call" : "calls"}
         </span>
       )}
-      {legs.map((l, i) => (
-        <span
-          key={i}
-          className={`${styles.legChip} ${l.s === "long" ? styles.legChipLong : styles.legChipShort}`}
-        >
-          <span
-            className={`${styles.legChipS} ${l.s === "long" ? styles.legChipSLong : styles.legChipSShort}`}
-          >
-            {l.s === "long" ? "B" : "S"}
-          </span>
-          {l.q}
-          {l.t[0].toUpperCase()} {l.k}
+      {puts > 0 && (
+        <span className={styles.legSummaryItem}>
+          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotPut}`} />
+          {puts} {puts === 1 ? "put" : "puts"}
         </span>
-      ))}
+      )}
+      {shares > 0 && (
+        <span className={styles.legSummaryItem}>
+          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotStock}`} />
+          {shares} {shares === 1 ? "share" : "shares"}
+        </span>
+      )}
     </div>
   );
 }
@@ -306,13 +371,13 @@ function LegDetailTable({
         <div className={styles.legTableRow}>
           <div className={styles.legTableLeg}>
             <span
-              className={`${styles.legChipS} ${
-                stockLeg.side === "long" ? styles.legChipSLong : styles.legChipSShort
+              className={`${styles.legSide} ${
+                stockLeg.side === "long" ? styles.legSideLong : styles.legSideShort
               }`}
             >
-              {stockLeg.side === "long" ? "B" : "S"}
+              {stockLeg.side === "long" ? "Long" : "Short"}
             </span>
-            <span>{stockLeg.quantity} Shares</span>
+            <span>{stockLeg.quantity} {stockLeg.quantity === 1 ? "share" : "shares"}</span>
           </div>
           <div className={styles.legTableExp}>Stock</div>
           <div className={styles.legTableNum}>${stockLeg.entry_price.toFixed(2)}</div>
@@ -349,14 +414,14 @@ function LegDetailTable({
           <div key={i} className={styles.legTableRow}>
             <div className={styles.legTableLeg}>
               <span
-                className={`${styles.legChipS} ${
-                  l.s === "long" ? styles.legChipSLong : styles.legChipSShort
+                className={`${styles.legSide} ${
+                  l.s === "long" ? styles.legSideLong : styles.legSideShort
                 }`}
               >
-                {l.s === "long" ? "B" : "S"}
+                {l.s === "long" ? "Long" : "Short"}
               </span>
               <span>
-                {l.q} {l.t[0].toUpperCase()} {l.k}
+                {l.q} {l.t === "call" ? "Call" : "Put"} {l.k}
               </span>
             </div>
             <div className={styles.legTableExp}>
@@ -476,7 +541,13 @@ function PositionRow({
             {p.strat} · entered {p.entry ?? "—"}
           </span>
         </div>
-        <LegChips legs={p.legs} stockLeg={p.stockLeg} />
+        <LegChips
+          legs={p.legs}
+          marks={p.marks}
+          stockLeg={p.stockLeg}
+          underlyingPrice={p.px}
+          pxLive={p.pxLive}
+        />
         <div className={styles.monoNum}>
           {netPrefix}${fmtDollars(p.net)}
           <span className={styles.monoNumSub}>{p.net >= 0 ? "credit" : "debit"}</span>
@@ -1010,7 +1081,7 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
                         </span>
                       </div>
                       <div />
-                      <div />
+                      <LegSummary items={g.items} />
                       <div className={styles.monoNum}>
                         {g.net >= 0 ? "+" : "−"}${fmtDollars(g.net)}
                         <span className={styles.monoNumSub}>
