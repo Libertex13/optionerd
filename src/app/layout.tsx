@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { TintSync } from "@/components/TintSync";
 import { AuthProvider } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -63,7 +64,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('optionerd-tint')||'teal';document.documentElement.dataset.tint=t;}catch(e){document.documentElement.dataset.tint='teal';}`,
+            __html: `try{var m=localStorage.getItem('theme')||'light';if(m==='system'){m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}var t=localStorage.getItem('optionerd-tint-'+m)||(m==='dark'?'teal':'neutral');document.documentElement.dataset.tint=t;}catch(e){document.documentElement.dataset.tint='neutral';}`,
           }}
         />
         <Script
@@ -77,6 +78,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="light">
+          <TintSync />
           <AuthProvider>
             <Header />
             <main className="flex-1">{children}</main>
