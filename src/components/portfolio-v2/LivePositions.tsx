@@ -18,7 +18,9 @@ import type {
 } from "@/lib/portfolio/types";
 import { MiniPayoff } from "./MiniPayoff";
 import { Treemap } from "./Treemap";
-import { ExpiryCalendar } from "./ExpiryCalendar";
+import { ExpiryTimeline } from "./ExpiryTimeline";
+import { ExpiryCalendarDialog } from "./ExpiryCalendarDialog";
+import { buildPortfolioPositionUrl } from "@/lib/portfolio/share";
 
 const fmtDollars = (n: number) =>
   Math.round(Math.abs(n)).toLocaleString("en-US");
@@ -209,6 +211,7 @@ function buildTickerGroups(positions: PortfolioPosition[]): TickerGroup[] {
 interface LivePositionsProps {
   positions: PortfolioPosition[];
   onRefresh: () => Promise<void> | void;
+  onOpenRepair: () => void;
 }
 
 function stateBadgeClass(st: PositionState): string {
@@ -381,6 +384,10 @@ function PositionRow({
   expanded,
   onToggle,
   onDelete,
+  onClosePosition,
+  onOpenCalculator,
+  onOpenRepair,
+  onCopyShare,
   tickerHighlight,
   onMouseEnter,
   onMouseLeave,
@@ -389,6 +396,10 @@ function PositionRow({
   expanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onClosePosition: () => void;
+  onOpenCalculator: () => void;
+  onOpenRepair: () => void;
+  onCopyShare: () => void;
   tickerHighlight: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -491,11 +502,11 @@ function PositionRow({
               </div>
               <MiniPayoff position={p} />
               <div className={styles.expActions}>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Open in calculator →</button>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Close position</button>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Roll</button>
-                <button className={`${styles.btn} ${styles.btnSm}`}>Suggest hedge</button>
-                <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={onOpenCalculator}>Open in calculator →</button>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={onClosePosition}>Close position</button>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={onOpenRepair}>Roll</button>
+                <button className={`${styles.btn} ${styles.btnSm}`} onClick={onOpenRepair}>Suggest hedge</button>
+                <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={onCopyShare}>
                   Copy share link
                 </button>
                 <button
@@ -584,7 +595,7 @@ function PositionRow({
   );
 }
 
-export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
+export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositionsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightTicker, setHighlightTicker] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState("all");
@@ -605,7 +616,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
     });
   }
   const treemapRef = useRef<HTMLDivElement>(null);
-  const calendarRef = useRef<HTMLDivElement>(null);
+  const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
 
   function toggleSort(key: SortKey) {
     setSort((s) =>
@@ -624,6 +635,34 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
     } finally {
       setPendingDeleteId(null);
     }
+  }
+
+  async function closePosition(id: string, name: string) {
+    const realId = parentPositionId(id);
+    const pos = positions.find((item) => item.id === realId);
+    if (!pos || pos.state === "closed") return;
+    const confirmed = window.confirm(
+      `Close "${name}" and realize ${signedDollar(pos.pnl, 0)} P/L?`,
+    );
+    if (!confirmed) return;
+    const res = await fetch(`/api/positions/${realId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        state: "closed",
+        exit_date: new Date().toISOString(),
+        realised_pnl: pos.pnl,
+      }),
+    });
+    if (res.ok) await onRefresh();
+  }
+
+  function openInCalculator(position: PortfolioPosition) {
+    window.location.href = buildPortfolioPositionUrl(position);
+  }
+
+  async function copyShare(position: PortfolioPosition) {
+    await navigator.clipboard.writeText(buildPortfolioPositionUrl(position));
   }
 
   async function clearAll() {
@@ -865,9 +904,7 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
-            onClick={() =>
-              calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
+            onClick={() => setCalendarDialogOpen(true)}
             disabled={positions.length === 0}
           >
             Calendar
@@ -1000,6 +1037,10 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
                           setExpandedId(expandedId === p.id ? null : p.id)
                         }
                         onDelete={() => confirmAndDelete(p.id, p.name)}
+                        onClosePosition={() => closePosition(p.id, p.name)}
+                        onOpenCalculator={() => openInCalculator(p)}
+                        onOpenRepair={onOpenRepair}
+                        onCopyShare={() => copyShare(p)}
                         tickerHighlight={
                           highlightTicker === p.ticker && expandedId !== p.id
                         }
@@ -1018,8 +1059,8 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
       {positions.length > 0 && (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1.2fr 1fr",
+            display: "flex",
+            flexDirection: "column",
             gap: 12,
             marginTop: 14,
           }}
@@ -1033,17 +1074,24 @@ export function LivePositions({ positions, onRefresh }: LivePositionsProps) {
               <Treemap positions={positions} />
             </div>
           </div>
-          <div className={styles.card} ref={calendarRef}>
+          <div className={styles.card}>
             <div className={styles.cardHdr}>
-              <div className={styles.cardTitle}>Expiry calendar</div>
-              <div className={styles.cardSub}>next 60 days</div>
+              <div className={styles.cardTitle}>Expiry timeline</div>
+              <div className={styles.cardSub}>
+                next 60 days · open the calendar dialog for the full grid
+              </div>
             </div>
-            <div className={styles.cardBody}>
-              <ExpiryCalendar positions={positions} />
+            <div className={styles.cardBody} style={{ padding: 0 }}>
+              <ExpiryTimeline positions={positions} />
             </div>
           </div>
         </div>
       )}
+      <ExpiryCalendarDialog
+        positions={positions}
+        open={calendarDialogOpen}
+        onClose={() => setCalendarDialogOpen(false)}
+      />
     </section>
   );
 }
