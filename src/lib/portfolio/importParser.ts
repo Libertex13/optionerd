@@ -5,8 +5,12 @@ export interface ParsedPositionDraft {
   ticker: string;
   strategy: string;
   cost_basis: number | null;
+  entry_underlying_price?: number | null;
+  entry_date?: string | null;
   legs: PositionLeg[];
   stock_leg?: PositionStockLeg | null;
+  notes?: string | null;
+  tags?: string[];
 }
 
 export interface ParseResult {

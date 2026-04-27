@@ -167,10 +167,21 @@
   pointer-events: none;
 }
 .btnPrimary {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: var(--primary);
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
   font-weight: 600;
+}
+.btnPrimary:hover {
+  background: color-mix(in oklch, var(--foreground) 88%, var(--card));
+  border-color: color-mix(in oklch, var(--foreground) 88%, var(--card));
+  color: var(--background);
+}
+.btnPrimary:disabled {
+  background: color-mix(in oklch, var(--foreground) 7%, var(--card));
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  opacity: 1;
 }
 .btnGhost {
   background: transparent;
@@ -1026,7 +1037,7 @@
   border-radius: 8px;
   width: 100%;
   max-width: 1040px;
-  max-height: 90vh;
+  height: min(760px, 90vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1054,6 +1065,7 @@
   padding: 18px 22px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1155,7 +1167,10 @@
 .previewTable {
   border: 1px solid var(--border);
   border-radius: 4px;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 180px;
+  max-height: min(420px, 48vh);
   font-size: 12px;
   background: var(--card);
 }

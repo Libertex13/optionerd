@@ -9,10 +9,10 @@ interface ImportDialogProps {
   onImported: () => void;
 }
 
-type Mode = "paste" | "screenshot";
+type Mode = "tradestation" | "paste" | "screenshot";
 
 export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
-  const [mode, setMode] = useState<Mode>("paste");
+  const [mode, setMode] = useState<Mode>("tradestation");
 
   // Paste mode state (now AI-parsed — accepts any broker statement format)
   const [text, setText] = useState("");
@@ -29,9 +29,12 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   const [rows, setRows] = useState<ParsedPositionDraft[]>([]);
   const [parsed, setParsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [fetchingBroker, setFetchingBroker] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelInfo, setModelInfo] = useState<string | null>(null);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [skippedRows, setSkippedRows] = useState<Array<{ symbol: string; reason: string }>>([]);
+  const [accountSummary, setAccountSummary] = useState<string | null>(null);
 
   const totalCost = useMemo(
     () => rows.reduce((s, r) => s + (r.cost_basis ?? 0), 0),
@@ -42,7 +45,9 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     setRows([]);
     setParsed(false);
     setSkippedCount(0);
+    setSkippedRows([]);
     setModelInfo(null);
+    setAccountSummary(null);
     setError(null);
   }
 
@@ -50,6 +55,35 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     if (next === mode) return;
     setMode(next);
     resetPreview();
+  }
+
+  async function handleFetchTradeStation() {
+    setFetchingBroker(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/brokerage/tradestation/positions");
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "TradeStation import failed");
+        return;
+      }
+
+      setRows(Array.isArray(body.positions) ? body.positions : []);
+      const skipped = Array.isArray(body.skipped) ? body.skipped : [];
+      setSkippedRows(skipped);
+      setSkippedCount(skipped.length);
+      setParsed(true);
+
+      const accountCount = Array.isArray(body.accounts) ? body.accounts.length : 0;
+      const rawCount = typeof body.rawCount === "number" ? body.rawCount : 0;
+      setAccountSummary(
+        `${accountCount} account${accountCount === 1 ? "" : "s"} - ${rawCount} broker row${rawCount === 1 ? "" : "s"}`,
+      );
+    } catch {
+      setError("Network error");
+    } finally {
+      setFetchingBroker(false);
+    }
   }
 
   // ─── Paste mode (AI-parsed) ──────────────────────────
@@ -137,11 +171,16 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/positions/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ positions: rows }),
-      });
+      const res = await fetch(
+        mode === "tradestation"
+          ? "/api/brokerage/tradestation/import"
+          : "/api/positions/bulk",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ positions: rows }),
+        },
+      );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? "Import failed");
@@ -157,9 +196,11 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   }
 
   const subCopy =
-    mode === "paste"
-      ? "Paste anything from your broker — positions table, CSV, statement text. AI figures out the format."
-      : "Upload a screenshot of your broker's positions table. AI will extract each row.";
+    mode === "tradestation"
+      ? "Pull positions from your connected TradeStation account and review them before saving."
+      : mode === "paste"
+        ? "Paste anything from your broker — positions table, CSV, statement text. AI figures out the format."
+        : "Upload a screenshot of your broker's positions table. AI will extract each row.";
 
   return (
     <div className={styles.dialogBackdrop} onClick={onClose}>
@@ -184,6 +225,12 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         <div className={styles.dialogBody}>
           <div className={styles.importTabs}>
             <button
+              className={`${styles.importTab} ${mode === "tradestation" ? styles.importTabActive : ""}`}
+              onClick={() => switchMode("tradestation")}
+            >
+              TradeStation
+            </button>
+            <button
               className={`${styles.importTab} ${mode === "paste" ? styles.importTabActive : ""}`}
               onClick={() => switchMode("paste")}
             >
@@ -196,6 +243,30 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
               Upload screenshot
             </button>
           </div>
+
+          {mode === "tradestation" && (
+            <>
+              <div className={styles.importHint}>
+                TradeStation import is read-only. Option rows must have standard OCC symbols; unsupported rows are skipped and reported.
+              </div>
+              <div className={styles.importActions}>
+                <button
+                  className={`${styles.btn}`}
+                  onClick={handleFetchTradeStation}
+                  disabled={fetchingBroker}
+                >
+                  {fetchingBroker ? "Fetching..." : parsed ? "Refresh preview" : "Fetch from TradeStation"}
+                </button>
+                {parsed && (
+                  <span className={styles.importSummary}>
+                    {rows.length} ready
+                    {skippedCount > 0 ? ` - ${skippedCount} skipped` : ""} -{" "}
+                    {accountSummary ?? "TradeStation"}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
 
           {mode === "paste" && (
             <>
@@ -415,6 +486,27 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             </div>
           )}
 
+          {mode === "tradestation" && parsed && rows.length === 0 && (
+            <div className={styles.importHint}>
+              No supported TradeStation positions were found. If you hold options, check whether their symbols are standard OCC/OSI format.
+            </div>
+          )}
+
+          {mode === "tradestation" && skippedRows.length > 0 && (
+            <div className={styles.importHint}>
+              {skippedRows.slice(0, 6).map((row, idx) => (
+                <div key={`${row.symbol}-${idx}`} className={styles.mono}>
+                  {row.symbol}: {row.reason}
+                </div>
+              ))}
+              {skippedRows.length > 6 && (
+                <div className={styles.mono}>
+                  +{skippedRows.length - 6} more skipped
+                </div>
+              )}
+            </div>
+          )}
+
           {error && <div className={styles.importError}>{error}</div>}
         </div>
 
@@ -428,18 +520,22 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             disabled={submitting || rows.length === 0}
             title={
               rows.length === 0
-                ? mode === "paste"
-                  ? "Paste rows and click Parse first"
-                  : "Upload a screenshot and click Extract positions first"
+                ? mode === "tradestation"
+                  ? "Fetch TradeStation positions first"
+                  : mode === "paste"
+                    ? "Paste rows and click Parse first"
+                    : "Upload a screenshot and click Extract positions first"
                 : undefined
             }
           >
             {submitting
               ? "Importing…"
               : rows.length === 0
-                ? mode === "paste"
-                  ? "Parse rows first"
-                  : "Extract first"
+                ? mode === "tradestation"
+                  ? "Fetch first"
+                  : mode === "paste"
+                    ? "Parse rows first"
+                    : "Extract first"
                 : `Import ${rows.length} position${rows.length === 1 ? "" : "s"}`}
           </button>
         </div>
