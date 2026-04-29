@@ -14,7 +14,7 @@ The product is built by an ITPM-trained options trader who actually uses these t
 
 ### Business Model
 - Free tool — deep, genuinely useful, no crippled free tier
-- Monetization will evolve over time (ads, freemium, premium features) — do NOT build any monetization scaffolding yet
+- Monetization will evolve over time (ads, freemium, premium features, affiliate placements where contextually useful). Before paid traffic, follow `docs/pre-ads-launch-checklist.md`.
 - SEO is the primary growth channel — every page should be optimized for a specific keyword cluster
 - Paid Google Ads will supplement organic traffic (near-zero competition on these keywords)
 
