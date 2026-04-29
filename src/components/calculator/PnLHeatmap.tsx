@@ -27,10 +27,19 @@ const PRICE_RANGE_PCT = 0.20;
 
 /**
  * Generate evenly-spaced dates from today through expiration.
+ *
+ * For short-DTE positions we cap the column count at one-per-day so columns
+ * don't round to the same date (e.g. 11 columns over 2 DTE collapses to a
+ * row of "04/29 04/29 04/29 04/30 ..." duplicates).
  */
 function generateDateColumns(totalDte: number): { label: string; dte: number }[] {
+  if (totalDte <= 0) {
+    return [{ label: "Exp", dte: 0 }];
+  }
+
+  const numCols = Math.min(DATE_COLUMNS, totalDte + 1);
+  const steps = numCols - 1;
   const cols: { label: string; dte: number }[] = [];
-  const steps = DATE_COLUMNS - 1;
 
   for (let i = 0; i <= steps; i++) {
     const dte = Math.round(totalDte * (1 - i / steps));

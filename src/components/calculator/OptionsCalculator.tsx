@@ -99,6 +99,13 @@ function fallbackDaysToExpiry(expirationDate: string): number {
   return Math.max(0, Math.round(diffMs / 86_400_000));
 }
 
+/** Compact MM/DD label for narrow mobile rows (drops year + leading zeros). */
+function shortLegDate(iso: string): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+}
+
 /* ------------------------------------------------------------------ */
 
 /** A selected leg with its source contract and position config */
@@ -958,7 +965,7 @@ export function OptionsCalculator({
                 return (
                   <>
                     {showStock ? (
-                      <div className="flex items-center gap-3 rounded-md border border-dashed border-blue-500/50 bg-blue-500/5 py-2.5 px-3 font-mono text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 rounded-md border border-dashed border-blue-500/50 bg-blue-500/5 py-2 px-2.5 font-mono text-xs text-muted-foreground md:gap-3 md:py-2.5 md:px-3 md:text-sm">
                         <span className="font-bold text-blue-600/70 dark:text-blue-400/70">
                           SHARES
                         </span>
@@ -969,9 +976,9 @@ export function OptionsCalculator({
                     {placeholders.map((leg, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-3 rounded-md border border-dashed border-border bg-muted/20 py-2.5 px-3 font-mono text-sm text-muted-foreground"
+                        className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/20 py-2 px-2.5 font-mono text-xs text-muted-foreground md:gap-3 md:py-2.5 md:px-3 md:text-sm"
                       >
-                        <span className="w-5 text-center">{leg.quantity}</span>
+                        <span className="w-4 text-center md:w-5">{leg.quantity}</span>
                         <span>x</span>
                         <span
                           className={
@@ -1171,14 +1178,14 @@ export function OptionsCalculator({
                   <div
                     key={leg.id}
                     onClick={() => switchToLeg(index)}
-                    className={`flex items-center justify-between py-2 pr-3 font-mono text-sm cursor-pointer transition-colors border-l-2 ${
+                    className={`flex items-center justify-between py-2 pr-2.5 font-mono text-xs cursor-pointer transition-colors border-l-2 md:pr-3 md:text-sm ${
                       isActive
                         ? "border-l-primary bg-primary/5 dark:bg-primary/10"
                         : "border-l-transparent bg-muted/30 hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 pl-3">
-                      <span className="text-muted-foreground w-5 text-center font-medium">
+                    <div className="flex items-center gap-1.5 pl-2.5 md:gap-2.5 md:pl-3">
+                      <span className="text-muted-foreground w-4 text-center font-medium md:w-5">
                         {leg.quantity}
                       </span>
                       <span className="text-muted-foreground">x</span>
@@ -1191,8 +1198,9 @@ export function OptionsCalculator({
                         {leg.optionType === "call" ? "CALL" : "PUT"}
                       </span>
                       <span className="font-medium">${leg.contract.strikePrice.toFixed(2)}</span>
-                      <span className="text-muted-foreground">
-                        {leg.contract.expirationDate}
+                      <span className="whitespace-nowrap text-muted-foreground">
+                        <span className="md:hidden">{shortLegDate(leg.contract.expirationDate)}</span>
+                        <span className="hidden md:inline">{leg.contract.expirationDate}</span>
                       </span>
                       <span className="text-muted-foreground">@</span>
                       <span className="font-semibold">
@@ -1308,8 +1316,8 @@ export function OptionsCalculator({
             )}
 
             {/* Add Leg / Add Shares / Save */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between md:gap-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <button
                   onClick={addLeg}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -1346,7 +1354,7 @@ export function OptionsCalculator({
                   entry_price: stockLeg.entryPrice,
                 } : null;
                 return (
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <ShareTradeButton
                       ticker={chain.ticker}
                       underlyingPrice={chain.underlyingPrice}
@@ -1416,7 +1424,7 @@ export function OptionsCalculator({
                     return (
                       <div
                         key={index}
-                        className={`flex items-center justify-between py-2 px-3 font-mono text-sm ${
+                        className={`flex items-center justify-between py-2 px-2.5 font-mono text-xs md:px-3 md:text-sm ${
                           pnl > 0
                             ? "bg-green-500/5 dark:bg-green-500/10"
                             : pnl < 0
@@ -1424,8 +1432,8 @@ export function OptionsCalculator({
                               : "bg-muted/30"
                         }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-muted-foreground w-5 text-center font-medium">
+                        <div className="flex items-center gap-1.5 md:gap-2.5">
+                          <span className="text-muted-foreground w-4 text-center font-medium md:w-5">
                             {leg.quantity}
                           </span>
                           <span className="text-muted-foreground">x</span>
@@ -1438,8 +1446,9 @@ export function OptionsCalculator({
                             {leg.optionType.toUpperCase()}
                           </span>
                           <span className="font-medium">${leg.strikePrice.toFixed(2)}</span>
-                          <span className="text-muted-foreground">
-                            {leg.expirationDate}
+                          <span className="whitespace-nowrap text-muted-foreground">
+                            <span className="md:hidden">{shortLegDate(leg.expirationDate)}</span>
+                            <span className="hidden md:inline">{leg.expirationDate}</span>
                           </span>
                           <span className="text-muted-foreground">@</span>
                           <span className="font-semibold">

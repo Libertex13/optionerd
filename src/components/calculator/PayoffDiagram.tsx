@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -13,6 +14,18 @@ import {
 } from "recharts";
 import type { PayoffPoint } from "@/types/options";
 import { formatCurrency } from "@/lib/utils/formatting";
+
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
+}
 
 interface PayoffDiagramProps {
   data: PayoffPoint[];
@@ -56,6 +69,7 @@ export function PayoffDiagram({
   currentPrice,
   priceAxisLabel = "Underlying Price at Expiration",
 }: PayoffDiagramProps) {
+  const isMobile = useIsMobile();
   const chartData = data.map((point) => ({
     price: point.underlyingPrice,
     pnl: point.profitLoss,
@@ -161,7 +175,11 @@ export function PayoffDiagram({
             const tooClose = breakEvenPoints.some(
               (other, j) => j !== i && Math.abs(other - be) / currentPrice < 0.08
             );
-            const labelOffset = tooClose && i % 2 === 1 ? 34 : 18;
+            // On mobile, ticks and BE labels can vertically collide when BE
+            // matches a tick value; push BE labels further down to clear them.
+            const baseOffset = isMobile ? 28 : 18;
+            const stackedOffset = isMobile ? 44 : 34;
+            const labelOffset = tooClose && i % 2 === 1 ? stackedOffset : baseOffset;
 
             return (
               <ReferenceLine

@@ -261,6 +261,11 @@
   }
   html {
     @apply font-sans;
+    /* Reserve scrollbar gutter on both edges so desktop browsers (and
+     * device-emulator views in desktop browsers) don't visually shift content
+     * to the left when a vertical scrollbar appears. Mobile devices use
+     * overlay scrollbars, so this is a no-op there. */
+    scrollbar-gutter: stable both-edges;
   }
 }
 

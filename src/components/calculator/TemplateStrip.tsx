@@ -33,7 +33,7 @@ export function TemplateStrip({
           </button>
         )}
       </div>
-      <div className="px-3 py-2.5">
+      <div className="relative px-3 py-2.5">
         <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
           {templateOrder.map((slug) => {
             const tpl = strategyTemplates[slug];
@@ -63,6 +63,10 @@ export function TemplateStrip({
             );
           })}
         </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-background to-transparent md:hidden"
+        />
       </div>
     </div>
   );

@@ -78,9 +78,9 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="mx-auto max-w-7xl px-4 md:px-6 py-8">
+      <div className="mx-auto max-w-7xl px-2 pb-8 pt-3 md:px-6 md:py-8">
         {/* Breadcrumbs */}
-        <div className="font-mono text-[11px] text-muted-foreground mb-3.5">
+        <div className="font-mono text-[11px] text-muted-foreground mb-2 md:mb-3.5">
           <Link href="/" className="hover:text-foreground">
             home
           </Link>
@@ -93,12 +93,12 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
         </div>
 
         {/* Hero */}
-        <section className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 items-end mb-6">
+        <section className="mb-4 grid grid-cols-1 items-end gap-3 md:mb-6 md:grid-cols-[1fr_auto] md:gap-5">
           <div>
-            <h1 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05]">
+            <h1 className="text-2xl font-bold leading-[1.1] tracking-tight md:text-5xl md:leading-[1.05]">
               {def.name} Calculator
             </h1>
-            <p className="mt-3 max-w-[62ch] text-base text-muted-foreground">
+            <p className="mt-2 max-w-[62ch] text-[13px] text-muted-foreground md:mt-3 md:text-base">
               {def.description}
             </p>
           </div>
@@ -117,12 +117,14 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
           </div>
         </section>
 
-        {/* At a glance */}
-        <section className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-0 rounded-lg border border-border bg-card">
-          <GlanceCell label="Outlook" value={def.sentiment} />
-          <GlanceCell label="Max profit" value={def.maxProfit} tone="pos" />
-          <GlanceCell label="Max loss" value={def.maxLoss} tone="neg" />
-          <GlanceCell label="Break-even" value={def.breakEvenFormula} />
+        {/* At a glance — desktop only; mobile drops it for vertical space */}
+        <section className="mb-8 hidden md:block">
+          <div className="grid grid-cols-2 gap-0 rounded-lg border border-border bg-card md:grid-cols-4">
+            <GlanceCell label="Outlook" value={def.sentiment} />
+            <GlanceCell label="Max profit" value={def.maxProfit} tone="pos" />
+            <GlanceCell label="Max loss" value={def.maxLoss} tone="neg" />
+            <GlanceCell label="Break-even" value={def.breakEvenFormula} />
+          </div>
         </section>
 
         {/* 01 · Calculator */}
@@ -227,13 +229,15 @@ function SectionHead({
   sub?: string;
 }) {
   return (
-    <div className="mt-12 mb-5 flex items-baseline gap-3.5 border-b border-border pb-3">
-      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-        {number}
-      </span>
-      <h2 className="text-xl md:text-2xl font-bold tracking-tight">{title}</h2>
+    <div className="mt-4 mb-5 flex flex-col gap-1 border-b border-border pb-3 md:mt-12 md:flex-row md:items-baseline md:gap-3.5">
+      <div className="flex items-baseline gap-3.5">
+        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          {number}
+        </span>
+        <h2 className="text-xl font-bold tracking-tight md:text-2xl">{title}</h2>
+      </div>
       {sub ? (
-        <span className="ml-auto font-mono text-[12px] text-muted-foreground">
+        <span className="font-mono text-[12px] text-muted-foreground md:ml-auto">
           {sub}
         </span>
       ) : null}
@@ -263,6 +267,7 @@ function GlanceCell({
     </div>
   );
 }
+
 
 /** Simple markdown-to-HTML for educational content (headings, bold, lists, paragraphs) */
 function markdownToHtml(md: string): string {
