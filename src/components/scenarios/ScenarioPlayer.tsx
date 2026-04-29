@@ -159,8 +159,7 @@ function ScenarioShell({
       <div className="p-4 md:p-5 border-b border-border flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground mb-1">
-            Scenario · {config.ticker} · {fmtDateShort(config.from)} →{" "}
-            {fmtDateShort(config.to)}
+            {config.ticker} · {fmtDateShort(config.from)} → {fmtDateShort(config.to)}
           </div>
           <h3 className="text-xl md:text-2xl font-bold tracking-tight">
             {config.title}

@@ -22,6 +22,7 @@ import {
   DEFAULT_RISK_FREE_RATE,
 } from "@/lib/utils/constants";
 import { formatCurrency } from "@/lib/utils/formatting";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface TimeSliderProps {
   legs: StrategyLeg[];
@@ -83,8 +84,14 @@ export function TimeSlider({
   currentPrice,
   daysToExpiry,
 }: TimeSliderProps) {
+  const isMobile = useIsMobile();
   const [dayElapsed, setDayElapsed] = useState(0);
   const referenceCurveLabel = "At expiry";
+  // For short DTE, allow fractional steps so the slider feels smooth instead
+  // of snapping in 1-day jumps over a 2-3 day range.
+  const sliderStep = daysToExpiry < 30 ? 0.1 : 1;
+  const elapsedDisplay =
+    daysToExpiry < 10 ? dayElapsed.toFixed(1) : Math.round(dayElapsed).toString();
 
   const { expiryData, datedData, todayData, breakEvens, stats } =
     useMemo(() => {
@@ -219,7 +226,12 @@ export function TimeSlider({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={enhanced}
-              margin={{ top: 20, right: 30, left: 10, bottom: 50 }}
+              margin={{
+                top: 20,
+                right: isMobile ? 8 : 30,
+                left: isMobile ? 0 : 10,
+                bottom: 50,
+              }}
             >
               <defs>
                 <linearGradient id="tsProfitFill" x1="0" y1="0" x2="0" y2="1">
@@ -257,8 +269,8 @@ export function TimeSlider({
                 stroke="var(--color-muted-foreground)"
                 fontSize={11}
                 tick={{ fill: "var(--color-muted-foreground)" }}
-                width={55}
-                tickMargin={6}
+                width={isMobile ? 40 : 55}
+                tickMargin={isMobile ? 3 : 6}
               />
 
               <Tooltip content={<CustomTooltip />} />
@@ -386,7 +398,7 @@ export function TimeSlider({
             Date scrub
           </span>
           <span className="font-semibold">
-            {dayElapsed} / {daysToExpiry} days elapsed
+            {elapsedDisplay} / {daysToExpiry} days elapsed
           </span>
         </div>
         <input
@@ -394,8 +406,8 @@ export function TimeSlider({
           min={0}
           max={daysToExpiry}
           value={dayElapsed}
-          step={1}
-          onChange={(e) => setDayElapsed(parseInt(e.target.value))}
+          step={sliderStep}
+          onChange={(e) => setDayElapsed(parseFloat(e.target.value))}
           className="w-full h-0.75 bg-border rounded-sm appearance-none cursor-pointer
             [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
             [&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer

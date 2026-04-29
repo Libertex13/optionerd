@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Briefcase, Check } from "lucide-react";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { useAuth } from "@/hooks/useAuth";
 import type { SavedStockLeg, SavedTradeLeg } from "@/lib/supabase/types";
@@ -10,6 +11,7 @@ interface SavePositionButtonProps {
   underlyingPrice: number;
   legs: SavedTradeLeg[];
   stockLeg: SavedStockLeg | null;
+  className?: string;
 }
 
 function defaultPositionName(
@@ -49,6 +51,7 @@ export function SavePositionButton({
   underlyingPrice,
   legs,
   stockLeg,
+  className,
 }: SavePositionButtonProps) {
   const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -155,13 +158,20 @@ export function SavePositionButton({
       ) : (
         <button
           onClick={handleClick}
-          className={`text-xs transition-colors ${
+          className={`flex flex-col items-center justify-center gap-1 rounded-md px-1 py-2 transition-colors hover:bg-muted ${
             saved
-              ? "font-semibold text-green-600 dark:text-green-400"
+              ? "text-green-600 dark:text-green-400"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+          } ${className ?? ""}`}
         >
-          {saved ? "Added!" : user ? "Add to portfolio" : "Sign in to add"}
+          {saved ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Briefcase className="h-4 w-4" />
+          )}
+          <span className="text-[10px] font-medium">
+            {saved ? "Added" : user ? "Portfolio" : "Sign in"}
+          </span>
         </button>
       )}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -14,18 +13,7 @@ import {
 } from "recharts";
 import type { PayoffPoint } from "@/types/options";
 import { formatCurrency } from "@/lib/utils/formatting";
-
-function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  return isMobile;
-}
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface PayoffDiagramProps {
   data: PayoffPoint[];
@@ -105,7 +93,15 @@ export function PayoffDiagram({
   return (
     <div className="h-100 w-full md:h-110">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={enhanced} margin={{ top: 20, right: 30, left: 10, bottom: 60 }}>
+        <ComposedChart
+          data={enhanced}
+          margin={{
+            top: 20,
+            right: isMobile ? 8 : 30,
+            left: isMobile ? 0 : 10,
+            bottom: 60,
+          }}
+        >
           <defs>
             <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22c55e" stopOpacity={0.18} />
@@ -143,10 +139,10 @@ export function PayoffDiagram({
               return `$${v.toFixed(0)}`;
             }}
             stroke="var(--color-muted-foreground)"
-            fontSize={13}
+            fontSize={isMobile ? 11 : 13}
             tick={{ fill: "var(--color-muted-foreground)" }}
-            width={65}
-            tickMargin={6}
+            width={isMobile ? 40 : 65}
+            tickMargin={isMobile ? 3 : 6}
           />
 
           <Tooltip content={<CustomTooltip />} />

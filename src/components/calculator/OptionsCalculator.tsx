@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { Pencil, Plus, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -900,6 +901,134 @@ export function OptionsCalculator({
       };
     }, [chain, legs, stockLeg, priceTarget]);
 
+  // Active-leg editor fields. Built once per render so we can place the
+  // editor either at the top of the Position card (desktop) or inline beneath
+  // the active leg row (mobile) without duplicating JSX.
+  const editorFieldLabel =
+    "text-[10px] font-medium text-muted-foreground uppercase tracking-widest";
+  const fieldDirection = activeLeg ? (
+    <div className="space-y-1">
+      <Label className={editorFieldLabel}>Direction</Label>
+      <Select
+        value={activePositionType}
+        onValueChange={(v) => v && handlePositionTypeChange(v as PositionType)}
+      >
+        <SelectTrigger className="w-full uppercase">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="long">LONG</SelectItem>
+          <SelectItem value="short">SHORT</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  ) : null;
+  const fieldType = activeLeg ? (
+    <div className="space-y-1">
+      <Label className={editorFieldLabel}>Type</Label>
+      <Select
+        value={activeOptionType}
+        onValueChange={(v) => v && handleOptionTypeChange(v as OptionType)}
+      >
+        <SelectTrigger className="w-full uppercase">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="call">CALL</SelectItem>
+          <SelectItem value="put">PUT</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  ) : null;
+  const fieldExpiration = activeLeg && chain ? (
+    <div className="space-y-1">
+      <Label className={editorFieldLabel}>Expiration</Label>
+      <Select
+        value={activeExpiry}
+        onValueChange={(v) => v && handleExpiryChange(v)}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select expiry" />
+        </SelectTrigger>
+        <SelectContent>
+          {chain.expirations.map((exp) => (
+            <SelectItem key={exp.expirationDate} value={exp.expirationDate}>
+              {exp.expirationDate} ({exp.daysToExpiry}d)
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ) : null;
+  const fieldStrike = activeLeg ? (
+    <div className="space-y-1">
+      <Label className={editorFieldLabel}>Strike</Label>
+      <Select
+        value={activeLeg.contract.strikePrice.toString()}
+        onValueChange={(v) => v && handleStrikeChange(v)}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select strike" />
+        </SelectTrigger>
+        <SelectContent>
+          {activeContracts.map((c) => (
+            <SelectItem key={c.strikePrice} value={c.strikePrice.toString()}>
+              ${c.strikePrice.toFixed(2)} {c.inTheMoney ? "ITM" : "OTM"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ) : null;
+  const fieldQty = activeLeg ? (
+    <div className="space-y-1">
+      <Label className={editorFieldLabel}>Qty</Label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={qtyInput}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "" || /^\d{1,4}$/.test(v)) {
+            setQtyInput(v);
+            const parsed = parseInt(v);
+            if (!isNaN(parsed) && parsed >= 1) {
+              handleQuantityChange(parsed);
+            }
+          }
+        }}
+        onBlur={() => {
+          const parsed = parseInt(qtyInput);
+          if (isNaN(parsed) || parsed < 1) {
+            setQtyInput("1");
+            handleQuantityChange(1);
+          } else {
+            setQtyInput(String(Math.min(parsed, 9999)));
+          }
+        }}
+        className="flex h-8 w-full items-center rounded-sm border border-input bg-card px-2.5 font-mono text-sm font-medium text-center outline-none appearance-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 md:w-16 dark:bg-input/30"
+      />
+    </div>
+  ) : null;
+  const desktopLegEditor = activeLeg ? (
+    <div className="hidden flex-wrap items-baseline gap-2 rounded-md border-l-2 border-l-primary pl-3 md:flex">
+      {fieldDirection}
+      {fieldType}
+      {fieldExpiration}
+      {fieldStrike}
+      {fieldQty}
+    </div>
+  ) : null;
+  const mobileLegEditor = activeLeg ? (
+    <div className="grid grid-cols-2 gap-2 border-t border-border bg-muted/20 p-2.5 md:hidden">
+      {fieldDirection}
+      {fieldType}
+      <div className="col-span-2">{fieldExpiration}</div>
+      {fieldStrike}
+      {fieldQty}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-3">
       {/* Ticker Search */}
@@ -1029,12 +1158,16 @@ export function OptionsCalculator({
         </Card>
       )}
 
-      {/* Template Strip — shown when chain is loaded */}
+      {/* Template Strip — shown when chain is loaded. On mobile, hide when
+          we're already on a strategy-specific page (defaultTemplate set) to
+          reduce clutter; desktop keeps it as a quick-switch UI. */}
       {chain && (
-        <TemplateStrip
-          activeTemplate={activeTemplate}
-          onSelectTemplate={applyTemplate}
-        />
+        <div className={defaultTemplate ? "hidden md:block" : undefined}>
+          <TemplateStrip
+            activeTemplate={activeTemplate}
+            onSelectTemplate={applyTemplate}
+          />
+        </div>
       )}
 
       {/* Position Builder */}
@@ -1044,130 +1177,9 @@ export function OptionsCalculator({
             <CardTitle>Position</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Dropdowns — control the active leg */}
-            {activeLeg && (
-              <div className="flex flex-wrap items-baseline gap-2 rounded-md border-l-2 border-l-primary pl-3">
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                    Direction
-                  </Label>
-                  <Select
-                    value={activePositionType}
-                    onValueChange={(v) =>
-                      v && handlePositionTypeChange(v as PositionType)
-                    }
-                  >
-                    <SelectTrigger className="w-full uppercase">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="long">LONG</SelectItem>
-                      <SelectItem value="short">SHORT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                    Type
-                  </Label>
-                  <Select
-                    value={activeOptionType}
-                    onValueChange={(v) =>
-                      v && handleOptionTypeChange(v as OptionType)
-                    }
-                  >
-                    <SelectTrigger className="w-full uppercase">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="call">CALL</SelectItem>
-                      <SelectItem value="put">PUT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                    Expiration
-                  </Label>
-                  <Select
-                    value={activeExpiry}
-                    onValueChange={(v) => v && handleExpiryChange(v)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select expiry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {chain.expirations.map((exp) => (
-                        <SelectItem
-                          key={exp.expirationDate}
-                          value={exp.expirationDate}
-                        >
-                          {exp.expirationDate} ({exp.daysToExpiry}d)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                    Strike
-                  </Label>
-                  <Select
-                    value={activeLeg.contract.strikePrice.toString()}
-                    onValueChange={(v) => v && handleStrikeChange(v)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select strike" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeContracts.map((c) => (
-                        <SelectItem
-                          key={c.strikePrice}
-                          value={c.strikePrice.toString()}
-                        >
-                          ${c.strikePrice.toFixed(2)}{" "}
-                          {c.inTheMoney ? "ITM" : "OTM"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                    Qty
-                  </Label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={qtyInput}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "" || /^\d{1,4}$/.test(v)) {
-                        setQtyInput(v);
-                        const parsed = parseInt(v);
-                        if (!isNaN(parsed) && parsed >= 1) {
-                          handleQuantityChange(parsed);
-                        }
-                      }
-                    }}
-                    onBlur={() => {
-                      const parsed = parseInt(qtyInput);
-                      if (isNaN(parsed) || parsed < 1) {
-                        setQtyInput("1");
-                        handleQuantityChange(1);
-                      } else {
-                        setQtyInput(String(Math.min(parsed, 9999)));
-                      }
-                    }}
-                    className="flex items-center h-8 w-16 rounded-sm border border-input bg-card px-2.5 font-mono text-sm font-medium text-center outline-none appearance-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/30"
-                  />
-                </div>
-              </div>
-            )}
+            {/* Editor fields — control the active leg. Top of card on desktop,
+                inline beneath the active leg row on mobile (rendered below). */}
+            {desktopLegEditor}
 
             {/* Legs list */}
             {legs.length > 0 && (
@@ -1177,48 +1189,62 @@ export function OptionsCalculator({
                   return (
                   <div
                     key={leg.id}
-                    onClick={() => switchToLeg(index)}
-                    className={`flex items-center justify-between py-2 pr-2.5 font-mono text-xs cursor-pointer transition-colors border-l-2 md:pr-3 md:text-sm ${
+                    className={`border-l-2 ${
                       isActive
                         ? "border-l-primary bg-primary/5 dark:bg-primary/10"
                         : "border-l-transparent bg-muted/30 hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 pl-2.5 md:gap-2.5 md:pl-3">
-                      <span className="text-muted-foreground w-4 text-center font-medium md:w-5">
-                        {leg.quantity}
-                      </span>
-                      <span className="text-muted-foreground">x</span>
-                      <span
-                        className={`font-bold ${leg.positionType === "long" ? "text-green-600" : "text-red-600"}`}
-                      >
-                        {leg.positionType === "long" ? "BUY" : "SELL"}
-                      </span>
-                      <span className="font-semibold">
-                        {leg.optionType === "call" ? "CALL" : "PUT"}
-                      </span>
-                      <span className="font-medium">${leg.contract.strikePrice.toFixed(2)}</span>
-                      <span className="whitespace-nowrap text-muted-foreground">
-                        <span className="md:hidden">{shortLegDate(leg.contract.expirationDate)}</span>
-                        <span className="hidden md:inline">{leg.contract.expirationDate}</span>
-                      </span>
-                      <span className="text-muted-foreground">@</span>
-                      <span className="font-semibold">
-                        ${leg.premium.toFixed(2)}
-                      </span>
+                    <div
+                      onClick={() => switchToLeg(index)}
+                      className="flex items-center justify-between py-2 pr-2.5 font-mono text-xs cursor-pointer transition-colors md:pr-3 md:text-sm"
+                    >
+                      <div className="flex items-center gap-1.5 pl-2.5 md:gap-2.5 md:pl-3">
+                        <span className="text-muted-foreground w-4 text-center font-medium md:w-5">
+                          {leg.quantity}
+                        </span>
+                        <span className="text-muted-foreground">x</span>
+                        <span
+                          className={`font-bold ${leg.positionType === "long" ? "text-green-600" : "text-red-600"}`}
+                        >
+                          {leg.positionType === "long" ? "BUY" : "SELL"}
+                        </span>
+                        <span className="font-semibold">
+                          {leg.optionType === "call" ? "CALL" : "PUT"}
+                        </span>
+                        <span className="font-medium">${leg.contract.strikePrice.toFixed(2)}</span>
+                        <span className="whitespace-nowrap text-muted-foreground">
+                          <span className="md:hidden">{shortLegDate(leg.contract.expirationDate)}</span>
+                          <span className="hidden md:inline">{leg.contract.expirationDate}</span>
+                        </span>
+                        <span className="text-muted-foreground">@</span>
+                        <span className="font-semibold">
+                          ${leg.premium.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="ml-2 flex items-center gap-2">
+                        {!isActive && (
+                          <Pencil
+                            aria-hidden="true"
+                            strokeWidth={1.5}
+                            className="h-2.5 w-2.5 shrink-0 translate-y-px text-muted-foreground/60"
+                          />
+                        )}
+                        {legs.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeLeg(index);
+                            }}
+                            className="text-muted-foreground hover:text-red-500 transition-colors text-sm"
+                            aria-label="Remove leg"
+                          >
+                            x
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {legs.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeLeg(index);
-                        }}
-                        className="ml-2 text-muted-foreground hover:text-red-500 transition-colors text-sm"
-                        aria-label="Remove leg"
-                      >
-                        x
-                      </button>
-                    )}
+                    {isActive && mobileLegEditor}
                   </div>
                   );
                 })}
@@ -1315,68 +1341,77 @@ export function OptionsCalculator({
               </div>
             )}
 
-            {/* Add Leg / Add Shares / Save */}
-            <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between md:gap-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <button
-                  onClick={addLeg}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  + Add leg
-                </button>
-                {!stockLeg && (
-                  <button
-                    onClick={() => {
-                      const price = chain?.underlyingPrice ?? 0;
-                      setStockLeg({ positionType: "long", quantity: 100, entryPrice: price });
-                      setStockQtyInput("100");
-                      setStockPriceInput(price.toFixed(2));
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    + Add shares
+            {/* Action toolbar — icon + label buttons in a single row */}
+            {(() => {
+              const tradeLegs = legs.map((l) => ({
+                option_type: l.optionType,
+                position_type: l.positionType,
+                strike_price: l.contract.strikePrice,
+                premium: l.premium,
+                quantity: l.quantity,
+                expiration_date: l.contract.expirationDate,
+                implied_volatility: l.contract.impliedVolatility || 0.3,
+              }));
+              const tradeStockLeg = stockLeg ? {
+                position_type: stockLeg.positionType,
+                quantity: stockLeg.quantity,
+                entry_price: stockLeg.entryPrice,
+              } : null;
+              const showSaveActions = !!chain && (legs.length > 0 || !!stockLeg);
+              const actionBtn =
+                "flex flex-1 min-w-16 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+              return (
+                <div className="flex flex-wrap items-stretch gap-1">
+                  <button onClick={addLeg} className={actionBtn}>
+                    <Plus className="h-4 w-4" />
+                    <span className="text-[10px] font-medium">Add leg</span>
                   </button>
-                )}
-              </div>
-              {chain && (legs.length > 0 || stockLeg) && (() => {
-                const tradeLegs = legs.map((l) => ({
-                  option_type: l.optionType,
-                  position_type: l.positionType,
-                  strike_price: l.contract.strikePrice,
-                  premium: l.premium,
-                  quantity: l.quantity,
-                  expiration_date: l.contract.expirationDate,
-                  implied_volatility: l.contract.impliedVolatility || 0.3,
-                }));
-                const tradeStockLeg = stockLeg ? {
-                  position_type: stockLeg.positionType,
-                  quantity: stockLeg.quantity,
-                  entry_price: stockLeg.entryPrice,
-                } : null;
-                return (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <ShareTradeButton
-                      ticker={chain.ticker}
-                      underlyingPrice={chain.underlyingPrice}
-                      legs={tradeLegs}
-                      stockLeg={tradeStockLeg}
-                    />
-                    <SavePositionButton
-                      ticker={chain.ticker}
-                      underlyingPrice={chain.underlyingPrice}
-                      legs={tradeLegs}
-                      stockLeg={tradeStockLeg}
-                    />
-                    <SaveTradeButton
-                      ticker={chain.ticker}
-                      underlyingPrice={chain.underlyingPrice}
-                      legs={tradeLegs}
-                      stockLeg={tradeStockLeg}
-                    />
-                  </div>
-                );
-              })()}
-            </div>
+                  {!stockLeg && (
+                    <button
+                      onClick={() => {
+                        const price = chain?.underlyingPrice ?? 0;
+                        setStockLeg({
+                          positionType: "long",
+                          quantity: 100,
+                          entryPrice: price,
+                        });
+                        setStockQtyInput("100");
+                        setStockPriceInput(price.toFixed(2));
+                      }}
+                      className={actionBtn}
+                    >
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-[10px] font-medium">Add shares</span>
+                    </button>
+                  )}
+                  {showSaveActions && chain && (
+                    <>
+                      <ShareTradeButton
+                        ticker={chain.ticker}
+                        underlyingPrice={chain.underlyingPrice}
+                        legs={tradeLegs}
+                        stockLeg={tradeStockLeg}
+                        className="flex-1 min-w-16"
+                      />
+                      <SavePositionButton
+                        ticker={chain.ticker}
+                        underlyingPrice={chain.underlyingPrice}
+                        legs={tradeLegs}
+                        stockLeg={tradeStockLeg}
+                        className="flex-1 min-w-16"
+                      />
+                      <SaveTradeButton
+                        ticker={chain.ticker}
+                        underlyingPrice={chain.underlyingPrice}
+                        legs={tradeLegs}
+                        stockLeg={tradeStockLeg}
+                        className="flex-1 min-w-16"
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Price Target */}
             <div className="rounded-md border border-dashed border-border p-3 space-y-3">
@@ -1384,27 +1419,25 @@ export function OptionsCalculator({
                 <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest shrink-0">
                   Price Target
                 </Label>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-muted-foreground font-mono">$</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Enter price"
-                    value={priceTarget}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "" || /^\d*\.?\d*$/.test(v)) setPriceTarget(v);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    }}
-                    className="h-8 w-28 rounded-sm border border-input bg-transparent px-2 font-mono text-sm font-medium text-right outline-none placeholder:text-muted-foreground/40 placeholder:font-normal focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
-                  />
-                </div>
+                <span className="text-sm text-muted-foreground font-mono">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Enter price"
+                  value={priceTarget}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d*\.?\d*$/.test(v)) setPriceTarget(v);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="h-8 flex-1 min-w-0 rounded-sm border border-input bg-transparent px-2 font-mono text-sm font-medium text-right outline-none placeholder:text-muted-foreground/40 placeholder:font-normal focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
+                />
                 {priceTarget && (
                   <button
                     onClick={() => setPriceTarget("")}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                   >
                     Clear
                   </button>
@@ -1507,7 +1540,7 @@ export function OptionsCalculator({
               </p>
             )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-1 md:px-3">
             <PayoffDiagram
               data={payoffData}
               breakEvenPoints={breakEvenPoints}
@@ -1521,7 +1554,7 @@ export function OptionsCalculator({
       {/* Time Slider — payoff over time */}
       {strategyLegs.length > 0 && chain && maxDte > 0 && !isMixedExpiry && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="px-1 pt-6 md:px-3">
             <TimeSlider
               legs={strategyLegs}
               currentPrice={chain.underlyingPrice}
@@ -1548,7 +1581,7 @@ export function OptionsCalculator({
               P&L by Price &amp; Date
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-1 md:px-3">
             <PnLHeatmap
               legs={strategyLegs}
               currentPrice={chain.underlyingPrice}

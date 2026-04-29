@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Share2, X as XIcon } from "lucide-react";
 import type { SavedTradeLeg, SavedStockLeg } from "@/lib/supabase/types";
 import { buildShareUrl } from "@/lib/share/url";
 
@@ -9,6 +10,7 @@ interface ShareTradeButtonProps {
   underlyingPrice: number;
   legs: SavedTradeLeg[];
   stockLeg: SavedStockLeg | null;
+  className?: string;
 }
 
 export function ShareTradeButton({
@@ -16,6 +18,7 @@ export function ShareTradeButton({
   underlyingPrice,
   legs,
   stockLeg,
+  className,
 }: ShareTradeButtonProps) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
@@ -33,18 +36,21 @@ export function ShareTradeButton({
     }
   };
 
+  const Icon = copied ? Check : error ? XIcon : Share2;
+  const label = copied ? "Copied" : error ? "Failed" : "Share";
+  const stateClass = copied
+    ? "text-green-600 dark:text-green-400"
+    : error
+      ? "text-destructive"
+      : "text-muted-foreground hover:text-foreground";
+
   return (
     <button
       onClick={handleShare}
-      className={`text-xs transition-colors ${
-        copied
-          ? "text-green-600 dark:text-green-400 font-semibold"
-          : error
-            ? "text-destructive"
-            : "text-muted-foreground hover:text-foreground"
-      }`}
+      className={`flex flex-col items-center justify-center gap-1 rounded-md px-1 py-2 transition-colors hover:bg-muted ${stateClass} ${className ?? ""}`}
     >
-      {copied ? "Link copied!" : error ? "Copy failed" : "Share link"}
+      <Icon className="h-4 w-4" />
+      <span className="text-[10px] font-medium">{label}</span>
     </button>
   );
 }

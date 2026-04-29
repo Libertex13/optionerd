@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Bookmark, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSavedTrades } from "@/hooks/useSavedTrades";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -13,6 +14,7 @@ interface SaveTradeButtonProps {
   underlyingPrice: number;
   legs: SavedTradeLeg[];
   stockLeg: SavedStockLeg | null;
+  className?: string;
 }
 
 export function SaveTradeButton({
@@ -20,6 +22,7 @@ export function SaveTradeButton({
   underlyingPrice,
   legs,
   stockLeg,
+  className,
 }: SaveTradeButtonProps) {
   const { user } = useAuth();
   const { saveTrade } = useSavedTrades();
@@ -146,13 +149,20 @@ export function SaveTradeButton({
       ) : (
         <button
           onClick={handleClick}
-          className={`text-xs transition-colors ${
+          className={`flex flex-col items-center justify-center gap-1 rounded-md px-1 py-2 transition-colors hover:bg-muted ${
             saved
-              ? "text-green-600 dark:text-green-400 font-semibold"
+              ? "text-green-600 dark:text-green-400"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+          } ${className ?? ""}`}
         >
-          {saved ? "Saved!" : user ? "Save trade" : "Sign in to save"}
+          {saved ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Bookmark className="h-4 w-4" />
+          )}
+          <span className="text-[10px] font-medium">
+            {saved ? "Saved" : user ? "Save" : "Sign in"}
+          </span>
         </button>
       )}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />

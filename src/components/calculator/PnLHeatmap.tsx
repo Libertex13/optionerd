@@ -211,16 +211,19 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-sm">
+        <table className="w-full table-fixed border-collapse font-mono text-sm">
+          <colgroup>
+            <col className="w-20" />
+          </colgroup>
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-card px-3 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-widest">
+              <th className="sticky left-0 z-10 bg-card px-1.5 py-1 text-right text-[9px] font-medium text-muted-foreground uppercase tracking-widest">
                 Price
               </th>
               {dateColumns.map((col, i) => (
                 <th
                   key={i}
-                  className="px-2 py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
+                  className="px-0.5 py-1 text-center text-[9px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
                 >
                   {col.label}
                 </th>
@@ -233,7 +236,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
               return (
                 <tr key={rowIdx}>
                   <td
-                    className={`sticky left-0 z-10 bg-card px-3 py-1.5 text-right font-medium whitespace-nowrap border-r border-border ${
+                    className={`sticky left-0 z-10 bg-card px-1.5 py-0.5 text-right text-[10px] font-medium whitespace-nowrap border-r border-border ${
                       isNearCurrent
                         ? "text-foreground font-bold"
                         : "text-muted-foreground"
@@ -241,7 +244,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
                   >
                     ${price.toFixed(2)}
                     {isNearCurrent && (
-                      <span className="ml-1 text-xs text-primary font-semibold">&#9664;</span>
+                      <span className="ml-0.5 text-[9px] text-primary font-semibold">&#9664;</span>
                     )}
                   </td>
                   {grid[rowIdx].map((cell, colIdx) => {
@@ -249,7 +252,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
                     return (
                       <td
                         key={colIdx}
-                        className="px-1.5 py-1.5 text-center font-semibold tabular-nums"
+                        className="px-0.5 py-0.5 text-center text-[10px] font-semibold tabular-nums"
                         style={{
                           backgroundColor: cellColor(value, maxAbs),
                           color: textColor(value, maxAbs),
