@@ -64,7 +64,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
       const res = await fetch("/api/brokerage/tradestation/positions");
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error ?? "TradeStation import failed");
+        setError(body.error ?? "TradeStation update failed");
         return;
       }
 
@@ -197,7 +197,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
 
   const subCopy =
     mode === "tradestation"
-      ? "Pull positions from your connected TradeStation account and review them before saving."
+      ? "Pull positions from your connected TradeStation account and review them before replacing the current portfolio."
       : mode === "paste"
         ? "Paste anything from your broker — positions table, CSV, statement text. AI figures out the format."
         : "Upload a screenshot of your broker's positions table. AI will extract each row.";
@@ -211,7 +211,9 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
       >
         <div className={styles.dialogHdr}>
           <div>
-            <div className={styles.dialogTitle}>Import positions</div>
+            <div className={styles.dialogTitle}>
+              {mode === "tradestation" ? "Update positions" : "Import positions"}
+            </div>
             <div className={styles.dialogSub}>{subCopy}</div>
           </div>
           <button
@@ -247,7 +249,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
           {mode === "tradestation" && (
             <>
               <div className={styles.importHint}>
-                TradeStation import is read-only. Option rows must have standard OCC symbols; unsupported rows are skipped and reported.
+                TradeStation update is a sync: saving this preview replaces the current portfolio with these rows. Option rows must have standard OCC symbols; unsupported rows are skipped and reported.
               </div>
               <div className={styles.importActions}>
                 <button
@@ -255,7 +257,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                   onClick={handleFetchTradeStation}
                   disabled={fetchingBroker}
                 >
-                  {fetchingBroker ? "Fetching..." : parsed ? "Refresh preview" : "Fetch from TradeStation"}
+                  {fetchingBroker ? "Fetching..." : parsed ? "Refresh preview" : "Update preview"}
                 </button>
                 {parsed && (
                   <span className={styles.importSummary}>
@@ -511,6 +513,11 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         </div>
 
         <div className={styles.dialogFoot}>
+          {mode === "tradestation" && rows.length > 0 && (
+            <div className={styles.syncWarning}>
+              Replaces all existing portfolio positions.
+            </div>
+          )}
           <button className={`${styles.btn} ${styles.btnGhost}`} onClick={onClose}>
             Cancel
           </button>
@@ -521,7 +528,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             title={
               rows.length === 0
                 ? mode === "tradestation"
-                  ? "Fetch TradeStation positions first"
+                  ? "Update the TradeStation preview first"
                   : mode === "paste"
                     ? "Paste rows and click Parse first"
                     : "Upload a screenshot and click Extract positions first"
@@ -529,14 +536,18 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             }
           >
             {submitting
-              ? "Importing…"
+              ? mode === "tradestation"
+                ? "Updating..."
+                : "Importing…"
               : rows.length === 0
                 ? mode === "tradestation"
-                  ? "Fetch first"
+                  ? "Update preview first"
                   : mode === "paste"
                     ? "Parse rows first"
                     : "Extract first"
-                : `Import ${rows.length} position${rows.length === 1 ? "" : "s"}`}
+                : mode === "tradestation"
+                  ? `Update ${rows.length} position${rows.length === 1 ? "" : "s"}`
+                  : `Import ${rows.length} position${rows.length === 1 ? "" : "s"}`}
           </button>
         </div>
       </div>

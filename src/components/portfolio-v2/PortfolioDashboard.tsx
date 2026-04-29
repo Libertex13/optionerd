@@ -82,12 +82,12 @@ export function PortfolioDashboard() {
             {liveLabel}
           </span>
           <button
-            className={`${styles.btn} ${styles.btnSm}`}
+            className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
             onClick={() => setImportOpen(true)}
             disabled={!user}
-            title={!user ? "Sign in to import" : "Import from broker paste"}
+            title={!user ? "Sign in to update" : "Update positions from TradeStation or import manually"}
           >
-            Import
+            Update positions
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm}`}

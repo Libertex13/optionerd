@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isNerdPlan } from "@/lib/billing/plan";
 import type { ParsedPositionDraft } from "@/lib/portfolio/importParser";
+import { syncBrokerPositions, type BrokerSyncRow } from "@/lib/portfolio/brokerSync";
 
 interface ImportBody {
   positions: ParsedPositionDraft[];
@@ -20,7 +21,10 @@ function isValidDraft(position: ParsedPositionDraft): boolean {
 
 /**
  * POST /api/brokerage/tradestation/import
- * Saves selected TradeStation preview rows into the user's portfolio.
+ * Syncs selected TradeStation preview rows into the user's portfolio.
+ *
+ * This intentionally replaces the user's current portfolio rows with the
+ * reviewed TradeStation rows, so repeated updates do not duplicate positions.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -54,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No valid positions provided" }, { status: 400 });
   }
 
-  const rows = valid.map((position) => ({
+  const rows: BrokerSyncRow[] = valid.map((position) => ({
     user_id: user.id,
     state: "open",
     name: position.name,
@@ -69,11 +73,13 @@ export async function POST(request: Request) {
     tags: position.tags ?? ["broker:tradestation"],
   }));
 
-  const { data, error } = await supabase.from("positions").insert(rows).select();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const result = await syncBrokerPositions(supabase, rows);
+    return NextResponse.json(result, { status: 201 });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "TradeStation sync failed" },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json({ imported: data?.length ?? valid.length, positions: data }, { status: 201 });
 }

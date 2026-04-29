@@ -114,6 +114,9 @@ interface TickerGroup {
   net: number;
   pnl: number;
   cost: number;
+  dte: number;
+  dteMax: number;
+  state: PositionState | "mixed";
 }
 
 /**
@@ -190,22 +193,52 @@ function flattenToLegs(positions: PortfolioPosition[]): PortfolioPosition[] {
   return out;
 }
 
-function buildTickerGroups(positions: PortfolioPosition[]): TickerGroup[] {
+const groupSortValue = (g: TickerGroup, key: SortKey): number => {
+  if (key === "net") return g.net;
+  if (key === "pnl") return g.pnl;
+  return g.dte;
+};
+
+function groupState(items: PortfolioPosition[]): PositionState | "mixed" {
+  const first = items[0]?.state;
+  return first && items.every((p) => p.state === first) ? first : "mixed";
+}
+
+function buildTickerGroups(
+  positions: PortfolioPosition[],
+  sort: SortState,
+): TickerGroup[] {
   const map = new Map<string, PortfolioPosition[]>();
   for (const p of positions) {
     const arr = map.get(p.ticker) ?? [];
     arr.push(p);
     map.set(p.ticker, arr);
   }
+  const mult = sort.dir === "asc" ? 1 : -1;
   return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([ticker, items]) => ({
-      ticker,
-      items,
-      net: items.reduce((s, p) => s + p.net, 0),
-      pnl: items.reduce((s, p) => s + p.pnl, 0),
-      cost: items.reduce((s, p) => s + p.cost, 0),
-    }));
+    .map(([ticker, rawItems]) => {
+      const items = [...rawItems].sort(
+        (a, b) =>
+          (sortValue(a, sort.key) - sortValue(b, sort.key)) * mult ||
+          a.name.localeCompare(b.name),
+      );
+      const dtes = items.map((p) => p.dte).filter((dte) => dte >= 0);
+      return {
+        ticker,
+        items,
+        net: items.reduce((s, p) => s + p.net, 0),
+        pnl: items.reduce((s, p) => s + p.pnl, 0),
+        cost: items.reduce((s, p) => s + p.cost, 0),
+        dte: dtes.length > 0 ? Math.min(...dtes) : 0,
+        dteMax: Math.max(1, ...items.map((p) => p.dteMax)),
+        state: groupState(items),
+      };
+    })
+    .sort(
+      (a, b) =>
+        (groupSortValue(a, sort.key) - groupSortValue(b, sort.key)) * mult ||
+        a.ticker.localeCompare(b.ticker),
+    );
 }
 
 interface LivePositionsProps {
@@ -222,6 +255,45 @@ function stateBadgeClass(st: PositionState): string {
     closed: styles.stateClosed,
   };
   return `${styles.stateBadge} ${map[st]}`;
+}
+
+function groupStateBadgeClass(st: TickerGroup["state"]): string {
+  return st === "mixed"
+    ? `${styles.stateBadge} ${styles.stateMixed}`
+    : stateBadgeClass(st);
+}
+
+function titleStrategy(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function strategySummary(items: PortfolioPosition[]): string {
+  const optionLegs = items.flatMap((p) => p.legs);
+  const expiries = new Set(optionLegs.map((leg) => leg.exp));
+
+  if (
+    optionLegs.length > 1 &&
+    optionLegs.every((leg) => leg.s === "long" && leg.t === "call") &&
+    expiries.size > 1
+  ) {
+    return "Multi-expiry long calls";
+  }
+
+  if (
+    optionLegs.length > 1 &&
+    optionLegs.every((leg) => leg.s === "long" && leg.t === "put") &&
+    expiries.size > 1
+  ) {
+    return "Multi-expiry long puts";
+  }
+
+  const labels = Array.from(new Set(items.map((p) => titleStrategy(p.strat))));
+  if (labels.length <= 3) return labels.join(" · ");
+  return `${labels.slice(0, 3).join(" · ")} · +${labels.length - 3}`;
 }
 
 function fmtLegPrice(n: number) {
@@ -291,39 +363,57 @@ function LegChips({
 }
 
 function LegSummary({ items }: { items: PortfolioPosition[] }) {
-  let calls = 0;
-  let puts = 0;
-  let shares = 0;
+  const totals = {
+    longCall: 0,
+    shortCall: 0,
+    longPut: 0,
+    shortPut: 0,
+    longShares: 0,
+    shortShares: 0,
+  };
   for (const p of items) {
     for (const l of p.legs) {
-      if (l.t === "call") calls += l.q;
-      else puts += l.q;
+      if (l.t === "call" && l.s === "long") totals.longCall += l.q;
+      else if (l.t === "call") totals.shortCall += l.q;
+      else if (l.s === "long") totals.longPut += l.q;
+      else totals.shortPut += l.q;
     }
-    if (p.stockLeg) shares += p.stockLeg.quantity;
+    if (p.stockLeg) {
+      if (p.stockLeg.side === "long") totals.longShares += p.stockLeg.quantity;
+      else totals.shortShares += p.stockLeg.quantity;
+    }
   }
-  if (calls === 0 && puts === 0 && shares === 0) {
+
+  const rows = [
+    { key: "longCall", side: "Long", qty: totals.longCall, label: "call", dot: styles.legSummaryDotCall },
+    { key: "shortCall", side: "Short", qty: totals.shortCall, label: "call", dot: styles.legSummaryDotCall },
+    { key: "longPut", side: "Long", qty: totals.longPut, label: "put", dot: styles.legSummaryDotPut },
+    { key: "shortPut", side: "Short", qty: totals.shortPut, label: "put", dot: styles.legSummaryDotPut },
+    { key: "longShares", side: "Long", qty: totals.longShares, label: "share", dot: styles.legSummaryDotStock },
+    { key: "shortShares", side: "Short", qty: totals.shortShares, label: "share", dot: styles.legSummaryDotStock },
+  ].filter((row) => row.qty > 0);
+
+  if (rows.length === 0) {
     return <div className={styles.legSummary}>—</div>;
   }
+
   return (
     <div className={styles.legSummary}>
-      {calls > 0 && (
-        <span className={styles.legSummaryItem}>
-          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotCall}`} />
-          {calls} {calls === 1 ? "call" : "calls"}
+      {rows.map((row) => (
+        <span className={styles.legSummaryItem} key={row.key}>
+          <span className={`${styles.legSummaryDot} ${row.dot}`} />
+          <span
+            className={
+              row.side === "Long"
+                ? styles.legSummaryLong
+                : styles.legSummaryShort
+            }
+          >
+            {row.side}
+          </span>
+          {row.qty} {row.qty === 1 ? row.label : `${row.label}s`}
         </span>
-      )}
-      {puts > 0 && (
-        <span className={styles.legSummaryItem}>
-          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotPut}`} />
-          {puts} {puts === 1 ? "put" : "puts"}
-        </span>
-      )}
-      {shares > 0 && (
-        <span className={styles.legSummaryItem}>
-          <span className={`${styles.legSummaryDot} ${styles.legSummaryDotStock}`} />
-          {shares} {shares === 1 ? "share" : "shares"}
-        </span>
-      )}
+      ))}
     </div>
   );
 }
@@ -674,12 +764,12 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
   const [sort, setSort] = useState<SortState>({ key: "pnl", dir: "desc" });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
-  const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
     new Set(),
   );
 
-  function toggleCollapse(ticker: string) {
-    setCollapsedTickers((s) => {
+  function toggleTicker(ticker: string) {
+    setExpandedTickers((s) => {
       const next = new Set(s);
       if (next.has(ticker)) next.delete(ticker);
       else next.add(ticker);
@@ -768,7 +858,7 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const matched = flat.filter((p) => {
+    return flat.filter((p) => {
       if (stateFilter !== "all" && p.state !== stateFilter) return false;
       if (q) {
         const hay = `${p.ticker} ${p.name} ${p.strat}`.toLowerCase();
@@ -776,13 +866,9 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
       }
       return true;
     });
-    const mult = sort.dir === "asc" ? 1 : -1;
-    return [...matched].sort(
-      (a, b) => (sortValue(a, sort.key) - sortValue(b, sort.key)) * mult,
-    );
-  }, [flat, stateFilter, search, sort]);
+  }, [flat, stateFilter, search]);
 
-  const groups = useMemo(() => buildTickerGroups(filtered), [filtered]);
+  const groups = useMemo(() => buildTickerGroups(filtered, sort), [filtered, sort]);
 
   // Aggregate stats — only count positions that are actually carrying P/L
   // (open + closed realised). Watching positions contribute 0.
@@ -1048,28 +1134,36 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
             </div>
           ) : (
             groups.map((g) => {
-              const hasHeader = g.items.length >= 2;
-              const collapsed = hasHeader && collapsedTickers.has(g.ticker);
+              const expanded =
+                expandedTickers.has(g.ticker) || search.trim().length > 0;
               const pnlCls =
                 g.pnl > 0 ? styles.pnlPos : g.pnl < 0 ? styles.pnlNeg : "";
+              const first = g.items[0];
+              const groupPositionLabel =
+                g.items.length === 1 && first
+                  ? first.name
+                  : `${g.items.length} positions`;
+              const groupPositionSub =
+                g.items.length === 1 && first
+                  ? `${strategySummary(g.items)} · entered ${first.entry ?? "—"}`
+                  : strategySummary(g.items);
               return (
                 <div key={g.ticker}>
-                  {hasHeader && (
-                    <div
-                      className={`${styles.tickerGroupHeader} ${collapsed ? styles.tickerGroupHeaderCollapsed : ""}`}
-                      onClick={() => toggleCollapse(g.ticker)}
+                  <div
+                      className={`${styles.tickerGroupHeader} ${expanded ? "" : styles.tickerGroupHeaderCollapsed}`}
+                      onClick={() => toggleTicker(g.ticker)}
                       role="button"
                       tabIndex={0}
-                      aria-expanded={!collapsed}
+                      aria-expanded={expanded}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          toggleCollapse(g.ticker);
+                          toggleTicker(g.ticker);
                         }
                       }}
                     >
                       <div
-                        className={`${styles.tickerGroupChevron} ${collapsed ? "" : styles.tickerGroupChevronOpen}`}
+                        className={`${styles.tickerGroupChevron} ${expanded ? styles.tickerGroupChevronOpen : ""}`}
                         aria-hidden="true"
                       >
                         ▶
@@ -1077,10 +1171,17 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
                       <div className={styles.tickerGroupName}>
                         {g.ticker}
                         <span className={styles.tickerGroupSub}>
-                          {g.items.length} positions
+                          {g.items.length} position{g.items.length === 1 ? "" : "s"}
                         </span>
                       </div>
-                      <div />
+                      <div className={styles.tickerGroupPosition}>
+                        {groupPositionLabel}
+                        {groupPositionSub && (
+                          <span className={styles.tickerGroupSub}>
+                            {groupPositionSub}
+                          </span>
+                        )}
+                      </div>
                       <LegSummary items={g.items} />
                       <div className={styles.monoNum}>
                         {g.net >= 0 ? "+" : "−"}${fmtDollars(g.net)}
@@ -1094,11 +1195,16 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
                           on ${fmtDollars(g.cost)}
                         </span>
                       </div>
-                      <div />
-                      <div />
+                      <div className={styles.monoNum}>
+                        {g.dte}d<DteBar dte={g.dte} max={g.dteMax} />
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <span className={groupStateBadgeClass(g.state)}>
+                          {g.state.toUpperCase()}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                  {!collapsed &&
+                  {expanded &&
                     g.items.map((p) => (
                       <PositionRow
                         key={p.id}
