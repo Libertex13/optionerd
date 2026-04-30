@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./portfolio.module.css";
 import { LivePositions } from "./LivePositions";
 import { Scenarios } from "./Scenarios";
@@ -11,6 +11,10 @@ import { useScenarios } from "@/hooks/useScenarios";
 import { useAuth } from "@/hooks/useAuth";
 
 type Tab = "live" | "repair" | "scenarios";
+
+interface BrokerAccountSummary {
+  institution_name?: string | null;
+}
 
 function PortfolioSkeleton({ message }: { message: string }) {
   return (
@@ -61,6 +65,8 @@ export function PortfolioDashboard() {
   const [connectingBroker, setConnectingBroker] = useState(false);
   const [disconnectingBroker, setDisconnectingBroker] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountSummary[]>([]);
+  const [brokerStatusLoading, setBrokerStatusLoading] = useState(false);
   const [postSyncSettling, setPostSyncSettling] = useState(false);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settleDoneRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +92,30 @@ export function PortfolioDashboard() {
     return () => clearInterval(id);
   }, []);
 
+  const refreshBrokerStatus = useCallback(async () => {
+    if (!user) {
+      setBrokerAccounts([]);
+      setBrokerStatusLoading(false);
+      return;
+    }
+
+    setBrokerStatusLoading(true);
+    try {
+      const res = await fetch("/api/brokerage/accounts");
+      const body = await res.json().catch(() => ({}));
+      setBrokerAccounts(res.ok && Array.isArray(body.accounts) ? body.accounts : []);
+    } catch {
+      setBrokerAccounts([]);
+    } finally {
+      setBrokerStatusLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    void refreshBrokerStatus();
+  }, [authLoading, refreshBrokerStatus]);
+
   useEffect(() => {
     return () => {
       if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
@@ -103,6 +133,19 @@ export function PortfolioDashboard() {
       : tickAgoSec == null
         ? "Delayed · connecting…"
         : `Delayed · ${liveCoverage.live}/${liveCoverage.total} · refreshed ${tickAgoSec}s ago`;
+
+  const brokerConnected = brokerAccounts.length > 0;
+  const brokerInstitutions = Array.from(
+    new Set(
+      brokerAccounts
+        .map((account) => account.institution_name)
+        .filter((name): name is string => typeof name === "string" && name.length > 0),
+    ),
+  );
+  const brokerStatusLabel =
+    brokerInstitutions.length > 0
+      ? `${brokerInstitutions.join(", ")} connected`
+      : `${brokerAccounts.length} broker account${brokerAccounts.length === 1 ? "" : "s"} connected`;
 
   useEffect(() => {
     if (!postSyncSettling || posLoading) return;
@@ -171,6 +214,7 @@ export function PortfolioDashboard() {
         setConnectError(body.error ?? "Failed to disconnect brokerage");
         return;
       }
+      await refreshBrokerStatus();
       await refresh();
     } catch {
       setConnectError("Failed to disconnect brokerage");
@@ -184,6 +228,7 @@ export function PortfolioDashboard() {
     if (settleDoneRef.current) clearTimeout(settleDoneRef.current);
     setPostSyncSettling(true);
     await refresh();
+    await refreshBrokerStatus();
     settleTimeoutRef.current = setTimeout(() => {
       setPostSyncSettling(false);
       settleTimeoutRef.current = null;
@@ -218,22 +263,31 @@ export function PortfolioDashboard() {
             <span className={styles.pulseDot} />
             {liveLabel}
           </span>
-          <button
-            className={`${styles.btn} ${styles.btnSm}`}
-            onClick={() => connectBroker()}
-            disabled={!user || connectingBroker}
-            title={!user ? "Sign in to connect" : "Open the SnapTrade broker picker"}
-          >
-            Connect broker
-          </button>
-          <button
-            className={`${styles.btn} ${styles.btnSm}`}
-            onClick={disconnectBroker}
-            disabled={!user || disconnectingBroker}
-            title={!user ? "Sign in to disconnect" : "Disconnect the current SnapTrade broker"}
-          >
-            {disconnectingBroker ? "Disconnecting..." : "Disconnect broker"}
-          </button>
+          {brokerConnected ? (
+            <span className={styles.brokerStatus} title={brokerStatusLabel}>
+              <span className={styles.brokerStatusDot} />
+              {brokerStatusLabel}
+            </span>
+          ) : (
+            <button
+              className={`${styles.btn} ${styles.btnSm}`}
+              onClick={() => connectBroker()}
+              disabled={!user || connectingBroker || brokerStatusLoading}
+              title={!user ? "Sign in to connect" : "Open the SnapTrade broker picker"}
+            >
+              {connectingBroker ? "Connecting..." : "Connect broker"}
+            </button>
+          )}
+          {brokerConnected && (
+            <button
+              className={`${styles.btn} ${styles.btnSm}`}
+              onClick={disconnectBroker}
+              disabled={!user || disconnectingBroker}
+              title={!user ? "Sign in to disconnect" : "Disconnect the current SnapTrade broker"}
+            >
+              {disconnectingBroker ? "Disconnecting..." : "Disconnect broker"}
+            </button>
+          )}
           <button
             className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
             onClick={() => setImportOpen(true)}

@@ -67,6 +67,30 @@
   border-radius: 50%;
   animation: pfPulse 2s infinite;
 }
+.brokerStatus {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklch, #22c55e 45%, var(--border));
+  border-radius: 3px;
+  background: color-mix(in oklch, #22c55e 10%, var(--card));
+  color: var(--foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brokerStatusDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22c55e;
+}
 @keyframes pfPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
