@@ -3,10 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { isNerdPlan } from "@/lib/billing/plan";
 import type { ParsedPositionDraft } from "@/lib/portfolio/importParser";
 import { syncBrokerPositions, type BrokerSyncRow } from "@/lib/portfolio/brokerSync";
-import {
-  canUseDirectTradeStation,
-  directTradeStationUnavailableMessage,
-} from "@/lib/tradestation/access";
 
 interface ImportBody {
   positions: ParsedPositionDraft[];
@@ -24,11 +20,8 @@ function isValidDraft(position: ParsedPositionDraft): boolean {
 }
 
 /**
- * POST /api/brokerage/tradestation/import
- * Syncs selected TradeStation preview rows into the user's portfolio.
- *
- * This intentionally replaces the user's current portfolio rows with the
- * reviewed TradeStation rows, so repeated updates do not duplicate positions.
+ * POST /api/brokerage/import
+ * Syncs reviewed SnapTrade preview rows into the user's portfolio.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -38,13 +31,6 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!canUseDirectTradeStation(user)) {
-    return NextResponse.json(
-      { error: directTradeStationUnavailableMessage() },
-      { status: 404 },
-    );
   }
 
   try {
@@ -61,7 +47,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json().catch(() => null) as ImportBody | null;
+  const body = (await request.json().catch(() => null)) as ImportBody | null;
   const positions = Array.isArray(body?.positions) ? body.positions : [];
   const valid = positions.filter(isValidDraft);
 
@@ -81,7 +67,7 @@ export async function POST(request: Request) {
     legs: position.legs,
     stock_leg: position.stock_leg ?? null,
     notes: position.notes ?? null,
-    tags: position.tags ?? ["broker:tradestation"],
+    tags: position.tags ?? ["broker:snaptrade"],
   }));
 
   try {
@@ -89,7 +75,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "TradeStation sync failed" },
+      { error: err instanceof Error ? err.message : "Brokerage sync failed" },
       { status: 500 },
     );
   }

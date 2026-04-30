@@ -35,6 +35,7 @@ export function PortfolioContent() {
   const [accounts, setAccounts] = useState<BrokerAccount[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState("");
 
   const loadAccounts = async () => {
@@ -84,6 +85,32 @@ export function PortfolioContent() {
     }
   };
 
+  const handleDisconnect = async () => {
+    if (disconnecting) return;
+    const ok = window.confirm(
+      "Disconnect your current SnapTrade broker connection? You can reconnect with different credentials afterward.",
+    );
+    if (!ok) return;
+
+    setDisconnecting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/brokerage/disconnect", {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setAccounts([]);
+      } else {
+        setError(data.error ?? "Failed to disconnect brokerage");
+      }
+    } catch {
+      setError("Failed to disconnect brokerage");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="mx-auto max-w-3xl px-3 py-10">
@@ -111,7 +138,7 @@ export function PortfolioContent() {
         optioNerd.
       </p>
 
-      {justConnected && (
+      {justConnected && accounts && accounts.length > 0 && (
         <div className="mt-4 rounded-md border border-green-600/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
           ✓ Broker connection added. If you don&apos;t see accounts below yet,
           SnapTrade may still be syncing — refresh in a moment.
@@ -131,30 +158,16 @@ export function PortfolioContent() {
         </h2>
         <p className="text-sm text-muted-foreground mb-3">
           Opens SnapTrade&apos;s secure connection portal to link your
-          brokerage account. Supports 20+ brokers including Tradestation,
+          brokerage account. Supports 20+ brokers including TradeStation,
           Schwab, Fidelity, IBKR, and more.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => handleConnect("TRADESTATION")}
+            onClick={() => handleConnect()}
             disabled={connecting}
             className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 h-9 text-sm font-medium hover:bg-primary/80 transition-all disabled:opacity-50"
           >
-            {connecting ? "Opening..." : "Connect Tradestation"}
-          </button>
-          <button
-            onClick={() => handleConnect("TRADESTATION-SIM")}
-            disabled={connecting}
-            className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 h-9 text-sm font-medium hover:bg-muted transition-all disabled:opacity-50"
-          >
-            Connect Tradestation Sim
-          </button>
-          <button
-            onClick={() => handleConnect()}
-            disabled={connecting}
-            className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 h-9 text-sm font-medium hover:bg-muted transition-all disabled:opacity-50"
-          >
-            Connect other broker
+            {connecting ? "Opening..." : "Connect broker"}
           </button>
         </div>
       </section>
@@ -220,12 +233,21 @@ export function PortfolioContent() {
         )}
 
         {!loading && accounts && accounts.length > 0 && (
-          <button
-            onClick={loadAccounts}
-            className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Refresh
-          </button>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              onClick={loadAccounts}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="text-xs text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+            >
+              {disconnecting ? "Disconnecting..." : "Disconnect broker"}
+            </button>
+          </div>
         )}
       </section>
 

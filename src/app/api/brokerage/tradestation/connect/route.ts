@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
+  canUseDirectTradeStation,
+  directTradeStationUnavailableMessage,
+} from "@/lib/tradestation/access";
+import {
   TRADESTATION_AUDIENCE,
   TRADESTATION_AUTH_BASE,
   TRADESTATION_CLIENT_ID,
@@ -24,6 +28,13 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canUseDirectTradeStation(user)) {
+    return NextResponse.json(
+      { error: directTradeStationUnavailableMessage() },
+      { status: 404 },
+    );
   }
 
   try {

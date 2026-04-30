@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { removeConnection } from "@/lib/tradestation/tokens";
+import {
+  canUseDirectTradeStation,
+  directTradeStationUnavailableMessage,
+} from "@/lib/tradestation/access";
 
 /**
  * DELETE /api/brokerage/tradestation/disconnect
@@ -16,6 +20,13 @@ export async function DELETE() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canUseDirectTradeStation(user)) {
+    return NextResponse.json(
+      { error: directTradeStationUnavailableMessage() },
+      { status: 404 },
+    );
   }
 
   try {

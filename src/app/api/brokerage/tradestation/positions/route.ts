@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { isNerdPlan } from "@/lib/billing/plan";
 import { listAllPositions } from "@/lib/tradestation/api";
 import { normalizeTradeStationPositions } from "@/lib/tradestation/positions";
+import {
+  canUseDirectTradeStation,
+  directTradeStationUnavailableMessage,
+} from "@/lib/tradestation/access";
 
 /**
  * GET /api/brokerage/tradestation/positions
@@ -16,6 +20,13 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canUseDirectTradeStation(user)) {
+    return NextResponse.json(
+      { error: directTradeStationUnavailableMessage() },
+      { status: 404 },
+    );
   }
 
   try {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeAuthCode, saveTokens } from "@/lib/tradestation/tokens";
+import { canUseDirectTradeStation } from "@/lib/tradestation/access";
 
 /**
  * GET /api/brokerage/tradestation/callback
@@ -39,6 +40,12 @@ export async function GET(request: Request) {
   if (!user) {
     baseRedirect.searchParams.set("tradestation", "error");
     baseRedirect.searchParams.set("reason", "not_signed_in");
+    return NextResponse.redirect(baseRedirect);
+  }
+
+  if (!canUseDirectTradeStation(user)) {
+    baseRedirect.searchParams.set("tradestation", "error");
+    baseRedirect.searchParams.set("reason", "direct_tradestation_disabled");
     return NextResponse.redirect(baseRedirect);
   }
 

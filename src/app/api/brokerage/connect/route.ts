@@ -3,6 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSnapTrade } from "@/lib/snaptrade/client";
 
+function brokerLabel(broker: string): string {
+  return broker
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
 /**
  * POST /api/brokerage/connect
  *
@@ -80,6 +87,26 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
     const body = await request.json().catch(() => ({}));
     const broker: string | undefined = body.broker;
+
+    if (broker) {
+      const partnerInfo = await snaptrade.referenceData.getPartnerInfo();
+      const allowed = partnerInfo.data.allowed_brokerages ?? [];
+      const allowedSlugs = allowed
+        .map((item) => item.slug)
+        .filter((slug): slug is string => typeof slug === "string");
+      const matched = allowed.find((item) => item.slug === broker);
+
+      if (!matched || matched.enabled === false) {
+        return NextResponse.json(
+          {
+            error: `${brokerLabel(broker)} is not enabled for this SnapTrade client yet.`,
+            broker,
+            allowedBrokerages: allowedSlugs,
+          },
+          { status: 409 },
+        );
+      }
+    }
 
     const loginRes = await snaptrade.authentication.loginSnapTradeUser({
       userId: snaptradeUserId,

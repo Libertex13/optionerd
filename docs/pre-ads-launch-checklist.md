@@ -65,8 +65,8 @@ funnel.
 
 ## Brokerage Readiness
 
-- [ ] Wait for SnapTrade to enable `TRADESTATION` and `TRADESTATION-SIM` for the
-      optionerd SnapTrade client.
+- [x] SnapTrade enabled `TRADESTATION` and `TRADESTATION-SIM` for the optionerd
+      SnapTrade client.
 - [ ] Test SnapTrade TradeStation connection end to end.
 - [ ] Test at least a few other SnapTrade brokers as accounts become available.
 - [ ] Add graceful handling for brokers that return incomplete options data.

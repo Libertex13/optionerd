@@ -6,13 +6,16 @@ import type { ParsedPositionDraft } from "@/lib/portfolio/importParser";
 
 interface ImportDialogProps {
   onClose: () => void;
-  onImported: () => void;
+  onImported: () => Promise<void> | void;
 }
 
-type Mode = "tradestation" | "paste" | "screenshot";
+type Mode = "brokerage" | "paste" | "screenshot";
 
-export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
-  const [mode, setMode] = useState<Mode>("tradestation");
+export function ImportDialog({
+  onClose,
+  onImported,
+}: ImportDialogProps) {
+  const [mode, setMode] = useState<Mode>("brokerage");
 
   // Paste mode state (now AI-parsed — accepts any broker statement format)
   const [text, setText] = useState("");
@@ -57,14 +60,14 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     resetPreview();
   }
 
-  async function handleFetchTradeStation() {
+  async function handleFetchBrokerage() {
     setFetchingBroker(true);
     setError(null);
     try {
-      const res = await fetch("/api/brokerage/tradestation/positions");
+      const res = await fetch("/api/brokerage/positions");
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error ?? "TradeStation update failed");
+        setError(body.error ?? "Brokerage update failed");
         return;
       }
 
@@ -172,8 +175,8 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
     setError(null);
     try {
       const res = await fetch(
-        mode === "tradestation"
-          ? "/api/brokerage/tradestation/import"
+        mode === "brokerage"
+          ? "/api/brokerage/import"
           : "/api/positions/bulk",
         {
           method: "POST",
@@ -186,7 +189,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         setError(body.error ?? "Import failed");
         return;
       }
-      onImported();
+      await onImported();
       onClose();
     } catch {
       setError("Network error");
@@ -196,8 +199,8 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
   }
 
   const subCopy =
-    mode === "tradestation"
-      ? "Pull positions from your connected TradeStation account and review them before replacing the current portfolio."
+    mode === "brokerage"
+      ? "Pull positions from your connected brokerage account and review them before replacing the current portfolio."
       : mode === "paste"
         ? "Paste anything from your broker — positions table, CSV, statement text. AI figures out the format."
         : "Upload a screenshot of your broker's positions table. AI will extract each row.";
@@ -212,7 +215,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         <div className={styles.dialogHdr}>
           <div>
             <div className={styles.dialogTitle}>
-              {mode === "tradestation" ? "Update positions" : "Import positions"}
+              {mode === "brokerage" ? "Update positions" : "Import positions"}
             </div>
             <div className={styles.dialogSub}>{subCopy}</div>
           </div>
@@ -227,10 +230,10 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         <div className={styles.dialogBody}>
           <div className={styles.importTabs}>
             <button
-              className={`${styles.importTab} ${mode === "tradestation" ? styles.importTabActive : ""}`}
-              onClick={() => switchMode("tradestation")}
+              className={`${styles.importTab} ${mode === "brokerage" ? styles.importTabActive : ""}`}
+              onClick={() => switchMode("brokerage")}
             >
-              TradeStation
+              Brokerage
             </button>
             <button
               className={`${styles.importTab} ${mode === "paste" ? styles.importTabActive : ""}`}
@@ -246,15 +249,15 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             </button>
           </div>
 
-          {mode === "tradestation" && (
+          {mode === "brokerage" && (
             <>
               <div className={styles.importHint}>
-                TradeStation update is a sync: saving this preview replaces the current portfolio with these rows. Option rows must have standard OCC symbols; unsupported rows are skipped and reported.
+                Brokerage update is a sync: saving this preview replaces the current portfolio with these rows. Unsupported rows are skipped and reported.
               </div>
               <div className={styles.importActions}>
                 <button
                   className={`${styles.btn}`}
-                  onClick={handleFetchTradeStation}
+                  onClick={handleFetchBrokerage}
                   disabled={fetchingBroker}
                 >
                   {fetchingBroker ? "Fetching..." : parsed ? "Refresh preview" : "Update preview"}
@@ -263,7 +266,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
                   <span className={styles.importSummary}>
                     {rows.length} ready
                     {skippedCount > 0 ? ` - ${skippedCount} skipped` : ""} -{" "}
-                    {accountSummary ?? "TradeStation"}
+                    {accountSummary ?? "Brokerage"}
                   </span>
                 )}
               </div>
@@ -488,13 +491,13 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             </div>
           )}
 
-          {mode === "tradestation" && parsed && rows.length === 0 && (
+          {mode === "brokerage" && parsed && rows.length === 0 && (
             <div className={styles.importHint}>
-              No supported TradeStation positions were found. If you hold options, check whether their symbols are standard OCC/OSI format.
+              No supported brokerage positions were found. If this was a new connection, refresh after SnapTrade finishes syncing.
             </div>
           )}
 
-          {mode === "tradestation" && skippedRows.length > 0 && (
+          {mode === "brokerage" && skippedRows.length > 0 && (
             <div className={styles.importHint}>
               {skippedRows.slice(0, 6).map((row, idx) => (
                 <div key={`${row.symbol}-${idx}`} className={styles.mono}>
@@ -513,7 +516,7 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
         </div>
 
         <div className={styles.dialogFoot}>
-          {mode === "tradestation" && rows.length > 0 && (
+          {mode === "brokerage" && rows.length > 0 && (
             <div className={styles.syncWarning}>
               Replaces all existing portfolio positions.
             </div>
@@ -527,8 +530,8 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             disabled={submitting || rows.length === 0}
             title={
               rows.length === 0
-                ? mode === "tradestation"
-                  ? "Update the TradeStation preview first"
+                ? mode === "brokerage"
+                  ? "Update the brokerage preview first"
                   : mode === "paste"
                     ? "Paste rows and click Parse first"
                     : "Upload a screenshot and click Extract positions first"
@@ -536,16 +539,16 @@ export function ImportDialog({ onClose, onImported }: ImportDialogProps) {
             }
           >
             {submitting
-              ? mode === "tradestation"
+              ? mode === "brokerage"
                 ? "Updating..."
                 : "Importing…"
               : rows.length === 0
-                ? mode === "tradestation"
+                ? mode === "brokerage"
                   ? "Update preview first"
                   : mode === "paste"
                     ? "Parse rows first"
                     : "Extract first"
-                : mode === "tradestation"
+                : mode === "brokerage"
                   ? `Update ${rows.length} position${rows.length === 1 ? "" : "s"}`
                   : `Import ${rows.length} position${rows.length === 1 ? "" : "s"}`}
           </button>

@@ -66,6 +66,16 @@ export function AccountContent() {
   if (!user || !profile) return null;
 
   const isNerd = profile.plan === "nerd";
+  const directTradeStationTesterEmails = (
+    process.env.NEXT_PUBLIC_TRADESTATION_DIRECT_TESTER_EMAILS ?? ""
+  )
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const showDirectTradeStation =
+    process.env.NODE_ENV === "development" &&
+    !!user.email &&
+    directTradeStationTesterEmails.includes(user.email.toLowerCase());
   const memberSince = new Date(profile.created_at).toLocaleDateString(
     "en-US",
     { year: "numeric", month: "long", day: "numeric" },
@@ -161,7 +171,7 @@ export function AccountContent() {
         </div>
       </section>
 
-      <TradeStationConnection />
+      {showDirectTradeStation && <TradeStationConnection />}
 
       <ThemeSelector />
 

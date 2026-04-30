@@ -15,6 +15,10 @@ export function TradeStationConnection() {
   const flag = search.get("tradestation");
   const reason = search.get("reason");
 
+  const [callbackStatus, setCallbackStatus] = useState<{
+    flag: string;
+    reason: string | null;
+  } | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -31,6 +35,16 @@ export function TradeStationConnection() {
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!flag) return;
+    setCallbackStatus({ flag, reason });
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tradestation");
+    url.searchParams.delete("reason");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [flag, reason]);
 
   async function handleDisconnect() {
     if (busy) return;
@@ -58,15 +72,15 @@ export function TradeStationConnection() {
         ) : null}
       </div>
 
-      {flag === "connected" && (
+      {callbackStatus?.flag === "connected" && (
         <div className="mb-3 rounded-md border border-green-500/30 bg-green-500/5 px-3 py-2 text-sm">
           TradeStation connected. Your positions can now be imported
           automatically.
         </div>
       )}
-      {flag === "error" && (
+      {callbackStatus?.flag === "error" && (
         <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          Connection failed{reason ? `: ${reason}` : ""}. Try again.
+          Connection failed{callbackStatus.reason ? `: ${callbackStatus.reason}` : ""}. Try again.
         </div>
       )}
 

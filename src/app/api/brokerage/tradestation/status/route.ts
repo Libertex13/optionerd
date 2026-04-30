@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getConnection } from "@/lib/tradestation/tokens";
+import { canUseDirectTradeStation } from "@/lib/tradestation/access";
 
 /**
  * GET /api/brokerage/tradestation/status
@@ -15,6 +16,10 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canUseDirectTradeStation(user)) {
+    return NextResponse.json({ connected: false, directEnabled: false });
   }
 
   try {
