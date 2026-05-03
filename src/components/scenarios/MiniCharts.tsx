@@ -173,7 +173,7 @@ export function MomentCandleChart({
         />
         {layout.markerX != null ? (
           <div
-            className="absolute top-0 pointer-events-none border-l border-dashed border-amber-500/70"
+            className="absolute top-0 pointer-events-none border-l border-dashed border-scenario-accent/70"
             style={{
               left: `${layout.markerX}px`,
               bottom: `${layout.timeScaleHeight}px`,
@@ -182,7 +182,7 @@ export function MomentCandleChart({
         ) : null}
         {layout.markerX != null && layout.markerY != null ? (
           <div
-            className="absolute pointer-events-none h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-card shadow-md"
+            className="absolute pointer-events-none h-3.5 w-3.5 rounded-full bg-scenario-accent ring-2 ring-card shadow-md"
             style={{
               left: `${layout.markerX}px`,
               top: `${layout.markerY}px`,
@@ -360,7 +360,7 @@ export function MomentPnLChart({
         />
         {layout.markerX != null ? (
           <div
-            className="absolute top-0 pointer-events-none border-l border-dashed border-amber-500/70"
+            className="absolute top-0 pointer-events-none border-l border-dashed border-scenario-accent/70"
             style={{
               left: `${layout.markerX}px`,
               bottom: `${layout.timeScaleHeight}px`,
@@ -369,7 +369,7 @@ export function MomentPnLChart({
         ) : null}
         {layout.markerX != null && layout.markerY != null ? (
           <div
-            className="absolute pointer-events-none h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-card shadow-md"
+            className="absolute pointer-events-none h-3.5 w-3.5 rounded-full bg-scenario-accent ring-2 ring-card shadow-md"
             style={{
               left: `${layout.markerX}px`,
               top: `${layout.markerY}px`,

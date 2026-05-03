@@ -48,7 +48,7 @@ export function MomentCard({
 
   const numToneClass =
     moment.kind === "adjust"
-      ? "bg-amber-500 text-background"
+      ? "bg-scenario-accent text-white"
       : moment.kind === "exit"
         ? "bg-card border-2 border-foreground text-foreground"
         : moment.kind === "event"
@@ -197,7 +197,7 @@ export function MomentCard({
         </div>
 
         {moment.oneLine ? (
-          <blockquote className="font-serif italic text-sm leading-relaxed text-foreground pl-3 border-l-2 border-amber-500 bg-amber-500/5 py-2 pr-2.5 rounded-r">
+          <blockquote className="font-serif italic text-sm leading-relaxed text-foreground pl-3 border-l-2 border-scenario-accent bg-scenario-accent/5 py-2 pr-2.5 rounded-r">
             &ldquo;{moment.oneLine}&rdquo;
           </blockquote>
         ) : null}
@@ -254,7 +254,7 @@ function LegSnapshotCard({ snapshot }: LegSnapshotCardProps) {
               style={{ width: `${intrPct}%` }}
             />
             <div
-              className="bg-amber-500/75"
+              className="bg-scenario-accent/75"
               style={{ width: `${extrPct}%` }}
             />
           </div>

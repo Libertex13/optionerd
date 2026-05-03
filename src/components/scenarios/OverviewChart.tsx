@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { CandlestickData, Time } from "lightweight-charts";
+import { useTheme } from "next-themes";
+import type {
+  CandlestickData,
+  ISeriesMarkersPluginApi,
+  SeriesMarker,
+  Time,
+} from "lightweight-charts";
 import type {
   ScenarioCandle,
   ScenarioConfig,
@@ -9,6 +15,7 @@ import type {
 } from "@/lib/scenarios/types";
 import { cn } from "@/lib/utils";
 import type { MomentKind } from "@/lib/scenarios/types";
+import { readScenarioAccent, readScenarioAccentRgba } from "@/lib/scenarios/colors";
 
 function defaultKindLabel(kind: MomentKind): string {
   switch (kind) {
@@ -23,6 +30,25 @@ function defaultKindLabel(kind: MomentKind): string {
     case "decay":
       return "Hold";
   }
+}
+
+function buildMarkers(
+  decisions: DecisionPoint[],
+  activeIdx: number,
+): SeriesMarker<Time>[] {
+  const activeColor = readScenarioAccent();
+  const inactiveColor = readScenarioAccentRgba(0.85);
+  return decisions.map((d, i) => {
+    const isActive = i === activeIdx;
+    return {
+      time: d.date as Time,
+      position: "aboveBar",
+      shape: "circle",
+      color: isActive ? activeColor : inactiveColor,
+      text: `${i + 1}`,
+      size: isActive ? 2 : 1.4,
+    };
+  });
 }
 
 type OverviewChartProps = {
@@ -41,6 +67,9 @@ export function OverviewChart({
   onJumpToMoment,
 }: OverviewChartProps) {
   const chartHostRef = useRef<HTMLDivElement>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [chartLayout, setChartLayout] = useState<{
     priceScaleWidth: number;
     timeScaleHeight: number;
@@ -52,6 +81,10 @@ export function OverviewChart({
     plotWidth: 0,
     decisionX: config.decisions.map(() => null),
   });
+
+  const activeIdx = config.decisions.findIndex(
+    (d: DecisionPoint) => d.date === activeDate,
+  );
 
   useEffect(() => {
     const host = chartHostRef.current;
@@ -121,19 +154,61 @@ export function OverviewChart({
       }
 
       if (breakEven != null) {
+        const accentSoft = readScenarioAccentRgba(0.6);
         series.createPriceLine({
           price: breakEven,
-          color: "rgba(245,158,11,0.55)",
+          color: accentSoft,
           lineWidth: 1,
           lineStyle: 1,
           axisLabelVisible: true,
+          axisLabelColor: readScenarioAccent(),
+          axisLabelTextColor: "#ffffff",
           title: `BE ${breakEven.toFixed(2)}`,
         });
       }
 
-      chart.timeScale().fitContent();
+      // Pivotal-moment markers — circles anchored to candles, with the
+      // moment's number as text. Active styling is updated via the
+      // separate effect below that watches activeIdx.
+      markersRef.current = lw.createSeriesMarkers(
+        series,
+        buildMarkers(config.decisions, -1),
+      );
 
       const ts = chart.timeScale();
+
+      // Auto-zoom around the pivotal moments: buffer = 25% of the moment span
+      // on the left, 40% on the right (so post-trade context is visible).
+      // Falls back to fitContent if there are no decisions.
+      const decisions = config.decisions;
+      if (decisions.length > 0 && underlying.length > 0) {
+        const firstMs = new Date(decisions[0]!.date + "T00:00:00Z").getTime();
+        const lastMs = new Date(
+          decisions[decisions.length - 1]!.date + "T00:00:00Z",
+        ).getTime();
+        const minSpanMs = 45 * 86_400_000; // floor at 45 days so single moments don't render too tight
+        const spanMs = Math.max(lastMs - firstMs, minSpanMs);
+        const targetFromMs = firstMs - spanMs * 1.0;
+        const targetToMs = lastMs + spanMs * 1.3;
+
+        const dataFromMs = new Date(
+          underlying[0]!.date + "T00:00:00Z",
+        ).getTime();
+        const dataToMs = new Date(
+          underlying[underlying.length - 1]!.date + "T00:00:00Z",
+        ).getTime();
+
+        const visFromMs = Math.max(targetFromMs, dataFromMs);
+        const visToMs = Math.min(targetToMs, dataToMs);
+        const visFrom = new Date(visFromMs).toISOString().slice(0, 10);
+        const visTo = new Date(visToMs).toISOString().slice(0, 10);
+
+        ts.setVisibleRange({ from: visFrom as Time, to: visTo as Time });
+      } else {
+        ts.fitContent();
+      }
+
+
       const updateLayout = () => {
         if (disposed || !host) return;
         const priceScale = chart.priceScale("right");
@@ -169,6 +244,8 @@ export function OverviewChart({
         window.clearTimeout(kickoff);
         ts.unsubscribeVisibleTimeRangeChange(updateLayout);
         ts.unsubscribeSizeChange(updateLayout);
+        markersRef.current?.detach();
+        markersRef.current = null;
         chart.remove();
       };
     })();
@@ -177,11 +254,14 @@ export function OverviewChart({
       disposed = true;
       if (cleanup) cleanup();
     };
-  }, [underlying, config, breakEven]);
+  }, [underlying, config, breakEven, isDark]);
 
-  const activeIdx = config.decisions.findIndex(
-    (d: DecisionPoint) => d.date === activeDate,
-  );
+  // Update marker styling when the active moment changes (without rebuilding chart)
+  useEffect(() => {
+    if (markersRef.current) {
+      markersRef.current.setMarkers(buildMarkers(config.decisions, activeIdx));
+    }
+  }, [activeIdx, config.decisions]);
 
   return (
     <div className="relative">
@@ -205,8 +285,8 @@ export function OverviewChart({
               className={cn(
                 "absolute top-0 bottom-0 w-px border-l border-dashed",
                 activeIdx === i
-                  ? "border-amber-500/70"
-                  : "border-amber-500/25",
+                  ? "border-scenario-accent/70"
+                  : "border-scenario-accent/25",
               )}
               style={{ left: `${x}px` }}
             />
@@ -214,57 +294,34 @@ export function OverviewChart({
         )}
       </div>
 
-      <div
-        className="absolute left-0 top-1 pointer-events-none"
-        style={{ right: chartLayout.priceScaleWidth }}
-      >
-        {chartLayout.decisionX.map((x, i) => {
-          if (x == null) return null;
-          const d = config.decisions[i]!;
+      {/* Legend strip below the chart — pairs numbers with moment labels */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px]">
+        {config.decisions.map((d, i) => {
           const isActive = activeIdx === i;
           const label = d.shortLabel ?? defaultKindLabel(d.kind);
-          const anchorLeft =
-            chartLayout.plotWidth > 0 && x / chartLayout.plotWidth > 0.75;
           return (
             <button
               key={i}
+              type="button"
               onClick={() => onJumpToMoment(i)}
-              title={`${i + 1}. ${d.title}`}
-              aria-label={`Jump to ${d.title}`}
               className={cn(
-                "absolute top-0 pointer-events-auto",
-                "flex items-center h-6 rounded-full border shadow-sm transition-all",
-                "font-mono text-[11px] font-medium backdrop-blur-sm",
+                "inline-flex items-center gap-1.5 transition-colors",
                 isActive
-                  ? "bg-amber-500 text-white border-amber-600 scale-105"
-                  : "bg-card/90 text-muted-foreground border-amber-500/50 hover:border-amber-500 hover:text-foreground",
-                anchorLeft && "flex-row-reverse",
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
-              style={{
-                left: `${x}px`,
-                transform: anchorLeft
-                  ? "translateX(calc(-100% + 12px))"
-                  : "translateX(-12px)",
-              }}
             >
               <span
                 className={cn(
-                  "flex items-center justify-center h-6 w-6 shrink-0 font-bold rounded-full",
+                  "inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold",
                   isActive
-                    ? "text-white"
-                    : "text-amber-600 dark:text-amber-400",
+                    ? "bg-scenario-accent text-white border-scenario-accent"
+                    : "bg-card text-scenario-accent border-scenario-accent/60",
                 )}
               >
                 {i + 1}
               </span>
-              <span
-                className={cn(
-                  "whitespace-nowrap tracking-tight",
-                  anchorLeft ? "pl-2 pr-1" : "pl-0.5 pr-2.5",
-                )}
-              >
-                {label}
-              </span>
+              <span className="tracking-tight">{label}</span>
             </button>
           );
         })}

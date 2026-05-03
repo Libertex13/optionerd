@@ -37,11 +37,11 @@ export function NerdSays({
   const bubblePad = size === "sm" ? "p-3" : "p-3.5 md:p-4";
   const bubbleTone =
     tone === "quote"
-      ? "border-amber-500/40 bg-amber-500/5"
+      ? "border-scenario-accent/40 bg-scenario-accent/5"
       : "border-border bg-card";
   const tailTone =
     tone === "quote"
-      ? "border-amber-500/40 bg-amber-500/5"
+      ? "border-scenario-accent/40 bg-scenario-accent/5"
       : "border-border bg-card";
 
   return (
