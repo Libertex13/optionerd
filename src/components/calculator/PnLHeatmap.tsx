@@ -7,6 +7,7 @@ import {
   calculateStrategyProfitLossAtDate,
 } from "@/lib/pricing/payoff";
 import { DEFAULT_RISK_FREE_RATE } from "@/lib/utils/constants";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 type DisplayMode = "$" | "%";
 
@@ -16,8 +17,11 @@ interface PnLHeatmapProps {
   daysToExpiry: number;
 }
 
-/** Number of date columns in the heatmap */
-const DATE_COLUMNS = 11;
+/** Maximum date columns in the heatmap (capped so very long-dated positions
+ *  don't squish labels). The expiry column is always included as the last
+ *  one regardless of DTE. Desktop has more horizontal room than mobile. */
+const DATE_COLUMNS_MOBILE = 7;
+const DATE_COLUMNS_DESKTOP = 10;
 
 /** Number of price rows in the heatmap */
 const PRICE_ROWS = 21;
@@ -32,12 +36,12 @@ const PRICE_RANGE_PCT = 0.20;
  * don't round to the same date (e.g. 11 columns over 2 DTE collapses to a
  * row of "04/29 04/29 04/29 04/30 ..." duplicates).
  */
-function generateDateColumns(totalDte: number): { label: string; dte: number }[] {
+function generateDateColumns(totalDte: number, maxColumns: number): { label: string; dte: number }[] {
   if (totalDte <= 0) {
     return [{ label: "Exp", dte: 0 }];
   }
 
-  const numCols = Math.min(DATE_COLUMNS, totalDte + 1);
+  const numCols = Math.min(maxColumns, totalDte + 1);
   const steps = numCols - 1;
   const cols: { label: string; dte: number }[] = [];
 
@@ -149,9 +153,11 @@ function formatPercent(pct: number): string {
 
 export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>("$");
+  const isMobile = useIsMobile();
+  const maxColumns = isMobile ? DATE_COLUMNS_MOBILE : DATE_COLUMNS_DESKTOP;
 
   const { dateColumns, priceRows, grid, costBasis, maxAbsDollar, maxAbsPct } = useMemo(() => {
-    const dateCols = generateDateColumns(daysToExpiry);
+    const dateCols = generateDateColumns(daysToExpiry, maxColumns);
     const prices = generatePriceRows(currentPrice);
     const basis = calculateCostBasis(legs, currentPrice);
 
@@ -179,7 +185,7 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
       maxAbsDollar: maxDollar,
       maxAbsPct: maxPct,
     };
-  }, [legs, currentPrice, daysToExpiry]);
+  }, [legs, currentPrice, daysToExpiry, maxColumns]);
 
   const maxAbs = displayMode === "$" ? maxAbsDollar : maxAbsPct;
 
