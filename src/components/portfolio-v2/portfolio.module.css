@@ -328,6 +328,87 @@
 .controlsRight .btn,
 .controlsRight .btnSm { height: 36px; padding: 0 10px; font-size: 12.5px; }
 
+.btnIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+/* On desktop the SVG sits before the text label */
+.btn .btnIcon { display: none; }
+.btn .btnLabel { display: inline; }
+
+/* Filter dropdown (state) */
+.filterMenu {
+  position: relative;
+  display: inline-block;
+}
+.filterMenuBtn {
+  gap: 8px;
+}
+/* Override the default .btn rule that hides icons on desktop —
+   the filter dropdown shows its icon on both desktop and mobile */
+.filterMenuBtn .btnIcon { display: inline-block; }
+.filterMenuLabel {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.filterMenuChev {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+.filterMenuBtn[aria-expanded="true"] .filterMenuChev {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+.filterMenuPanel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px -8px oklch(0 0 0 / 0.25);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: filterMenuFade 0.12s ease;
+}
+@keyframes filterMenuFade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.filterMenuItem {
+  text-align: left;
+  padding: 7px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.filterMenuItem:hover {
+  background: color-mix(in oklch, var(--foreground) 6%, var(--card));
+}
+.filterMenuItemActive {
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 600;
+}
+.filterMenuItemActive:hover {
+  background: var(--foreground);
+}
+
 /* ===================== LIVE POSITIONS ===================== */
 
 .summaryStrip {
@@ -701,18 +782,34 @@
 .pnlPos { color: #22c55e; font-weight: 700; }
 .pnlNeg { color: #ef4444; font-weight: 700; }
 
+.dteDate {
+  margin-left: 5px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.dteHot { color: #ef4444; font-weight: 700; }
+
 .dteBar {
   width: 60px;
   height: 3px;
-  background: var(--muted);
+  /* Track: a percentage of the foreground colour so it's visible on both
+     dark and light backgrounds (var(--muted) blends into the card in light mode). */
+  background: color-mix(in oklch, var(--foreground) 14%, transparent);
   border-radius: 2px;
   margin-top: 4px;
   margin-left: auto;
   overflow: hidden;
 }
-.dteBar > div { height: 100%; background: var(--foreground); border-radius: 2px; }
-.dteBarWarn > div { background: #f59e0b; }
-.dteBarHot > div { background: #ef4444; }
+/* Fill: single neutral colour for every bar — urgency is now conveyed by the
+   coloured "Xd" text, so the bar just shows the time-elapsed ratio. */
+.dteBar > div {
+  height: 100%;
+  background: var(--foreground);
+  border-radius: 2px;
+}
 
 .stateBadge {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1410,4 +1507,199 @@
   color: #ef4444;
   font-size: 12px;
   font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* ===================== MOBILE — Live Positions table reflow ===================== */
+/* The 8-column position grid (~700px wide) is unusable below ~720px.
+   Switch ticker-group headers and position rows to a stacked card layout. */
+@media (max-width: 720px) {
+  .posHead { display: none; }
+
+  .tickerGroupHeader,
+  .posRow {
+    grid-template-columns: 14px 1fr auto;
+    grid-template-areas:
+      "chev tk   st"
+      "lg   lg   lg"
+      "pnl  pnl  dte";
+    column-gap: 8px;
+    row-gap: 6px;
+    padding: 12px 14px;
+    border-left-width: 2px;
+    align-items: center;
+  }
+
+  .tickerGroupHeader > *:nth-child(1),
+  .posRow > *:nth-child(1) {
+    grid-area: chev;
+  }
+  .tickerGroupHeader > *:nth-child(2),
+  .posRow > *:nth-child(2) {
+    grid-area: tk;
+    min-width: 0;
+  }
+  /* Contract name (3) hidden on mobile — redundant with ticker + leg chips */
+  .tickerGroupHeader > *:nth-child(3),
+  .posRow > *:nth-child(3) {
+    display: none;
+  }
+  .tickerGroupHeader > *:nth-child(4),
+  .posRow > *:nth-child(4) {
+    grid-area: lg;
+    min-width: 0;
+  }
+  /* Net cost (5) hidden on mobile — cost basis is low-signal on phone */
+  .tickerGroupHeader > *:nth-child(5),
+  .posRow > *:nth-child(5) {
+    display: none;
+  }
+  .tickerGroupHeader > *:nth-child(6),
+  .posRow > *:nth-child(6) {
+    grid-area: pnl;
+    text-align: left;
+  }
+  .tickerGroupHeader > *:nth-child(7),
+  .posRow > *:nth-child(7) {
+    grid-area: dte;
+    text-align: right;
+  }
+  .tickerGroupHeader > *:nth-child(8),
+  .posRow > *:nth-child(8) {
+    grid-area: st;
+    text-align: right;
+  }
+
+  /* DteBar pinned to right edge */
+  .dteBar { margin-left: auto; }
+
+  /* Tighter ticker label so it doesn't push state badge off-screen */
+  .tickerGroupName { font-size: 13px; }
+  .posTicker { font-size: 12.5px; }
+
+  /* Hide low-signal sublines on mobile:
+     - "1 POSITION" / "2 POSITIONS" under ticker (redundant with group label)
+     - "LONG CALL · entered <date>" under position name (strat shown in legs, entry date is low-signal on phone)
+     - underlying price next to ticker (already in dashboard summary) */
+  .tickerGroupSub,
+  .posNameSub,
+  .tkPx {
+    display: none;
+  }
+
+  /* Drop the entry → mark price tail on each leg in the collapsed card view —
+     keeps single-position rows (LegChips) visually consistent with multi-position
+     rows (LegSummary), and lets the leg row stay on one line. */
+  .legPrices { display: none; }
+  .legRow {
+    grid-template-columns: auto 1fr;
+    gap: 6px;
+  }
+
+  /* Drop the "on $X,XXX" P/L denominator subline on mobile to keep the row compact */
+  .monoNumSub { display: none; }
+
+  /* Greeks: 4 cols → 2x2 */
+  .statRow { grid-template-columns: repeat(2, 1fr); }
+  .statRow > div:nth-child(2) { border-right: 0; }
+  .statRow > div:nth-child(1),
+  .statRow > div:nth-child(2) { border-bottom: 1px solid var(--border); }
+
+  /* Search input full-width on mobile (was fixed 260px) */
+  .search { width: 100%; height: 30px; font-size: 12px; }
+  .controlsLeft { width: 100%; gap: 6px; }
+  .controlsRight { width: 100%; flex-wrap: wrap; gap: 4px; }
+
+  /* Compact buttons on mobile — segmented filters + action buttons */
+  .seg { height: 26px; }
+  .seg button { padding: 0 9px; font-size: 11px; }
+  .btn,
+  .controlsRight .btn,
+  .controlsRight .btnSm {
+    height: 26px;
+    padding: 0 9px;
+    font-size: 11.5px;
+  }
+
+  /* Toolbar action buttons → icon-only on mobile (Treemap/Calendar/Export/Clear) */
+  .controlsRight .btn .btnIcon { display: inline-block; }
+  .controlsRight .btn .btnLabel { display: none; }
+  .controlsRight .btn {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  /* …but the state filter keeps its label so users can see which filter is active */
+  .controlsRight .filterMenuBtn {
+    width: auto;
+    padding: 0 9px;
+    gap: 6px;
+  }
+
+  /* Summary KPI strip — shrink everything so 4 cards fit comfortably as 2x2 */
+  .sumPnl {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .sumPnl > div {
+    padding-right: 10px;
+  }
+  .sumPnl > div:nth-child(2) { border-right: 0; padding-right: 0; }
+  .sumPnl > div:nth-child(1),
+  .sumPnl > div:nth-child(2) {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .sumPnl > div:nth-child(3),
+  .sumPnl > div:nth-child(4) {
+    padding-top: 10px;
+  }
+  .sumK {
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+  }
+  .sumV {
+    font-size: 17px;
+    margin-top: 2px;
+  }
+  .sumDelta {
+    font-size: 10.5px;
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+
+  /* Net exposure card — tighter rows + smaller bar lane */
+  .greeksBar {
+    padding: 12px 14px;
+  }
+  .greeksHdr {
+    margin-bottom: 10px;
+  }
+  .gkRow {
+    gap: 7px;
+  }
+  /* Reorder via grid-areas so values land between label and bar — that way
+     "+$4.5" and "−$495.4" both appear visually centered in the row instead
+     of pinned to the right edge. JSX order is label, bar, value. */
+  .gkItem {
+    grid-template-columns: 64px 1fr 90px;
+    grid-template-areas: "k v t";
+    gap: 10px;
+    font-size: 11px;
+  }
+  .gkK {
+    grid-area: k;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  .gkTrack {
+    grid-area: t;
+    height: 5px;
+  }
+  .gkV {
+    grid-area: v;
+    font-size: 11.5px;
+    text-align: center;
+  }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./portfolio.module.css";
 import {
   fmtPct,
@@ -129,6 +129,12 @@ function legDisplayName(ticker: string, l: PortfolioLeg): string {
     : exp.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const optType = l.t === "call" ? "Call" : "Put";
   return `${ticker} ${expFmt} ${l.k} ${optType}`;
+}
+
+function fmtShortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 /**
@@ -418,6 +424,11 @@ function LegSummary({ items }: { items: PortfolioPosition[] }) {
   );
 }
 
+function dteUrgencyClass(dte: number): string {
+  if (dte <= 7) return styles.dteHot;
+  return "";
+}
+
 function DteBar({ dte, max }: { dte: number; max: number }) {
   const ratio = Math.max(0, Math.min(1, dte / max));
   const cls = dte <= 7 ? styles.dteBarHot : dte <= 14 ? styles.dteBarWarn : "";
@@ -647,7 +658,11 @@ function PositionRow({
           <span className={styles.monoNumSub}>{pnlSub}</span>
         </div>
         <div className={styles.monoNum}>
-          {p.dte}d<DteBar dte={p.dte} max={p.dteMax} />
+          <span className={dteUrgencyClass(p.dte)}>{p.dte}d</span>
+          {p.legs[0]?.exp && (
+            <span className={styles.dteDate}>{fmtShortDate(p.legs[0].exp)}</span>
+          )}
+          <DteBar dte={p.dte} max={p.dteMax} />
         </div>
         <div style={{ textAlign: "right" }}>
           <span className={stateBadgeClass(p.state)}>{p.state.toUpperCase()}</span>
@@ -760,13 +775,32 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightTicker, setHighlightTicker] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState("all");
-  const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>({ key: "pnl", dir: "desc" });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
   const [expandedTickers, setExpandedTickers] = useState<Set<string>>(
     new Set(),
   );
+  const [stateMenuOpen, setStateMenuOpen] = useState(false);
+  const stateMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!stateMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!stateMenuRef.current?.contains(e.target as Node)) {
+        setStateMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setStateMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [stateMenuOpen]);
 
   function toggleTicker(ticker: string) {
     setExpandedTickers((s) => {
@@ -857,16 +891,11 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
   const flat = useMemo(() => flattenToLegs(positions), [positions]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return flat.filter((p) => {
       if (stateFilter !== "all" && p.state !== stateFilter) return false;
-      if (q) {
-        const hay = `${p.ticker} ${p.name} ${p.strat}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
-  }, [flat, stateFilter, search]);
+  }, [flat, stateFilter]);
 
   const groups = useMemo(() => buildTickerGroups(filtered, sort), [filtered, sort]);
 
@@ -1024,61 +1053,102 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
 
       {/* Controls row */}
       <div className={styles.controlsRow}>
-        <div className={styles.controlsLeft}>
-          <input
-            className={styles.search}
-            placeholder="Search ticker or position…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <span className={styles.microLabel}>State</span>
-          <div className={styles.seg}>
-            {[
-              { v: "all", l: "All" },
-              { v: "open", l: "Open" },
-              { v: "watching", l: "Watching" },
-              { v: "closed", l: "Closed" },
-            ].map((o) => (
-              <button
-                key={o.v}
-                className={stateFilter === o.v ? styles.segActive : ""}
-                onClick={() => setStateFilter(o.v)}
-              >
-                {o.l}
-              </button>
-            ))}
-          </div>
-        </div>
         <div className={styles.controlsRight}>
+          <div className={styles.filterMenu} ref={stateMenuRef}>
+            <button
+              className={`${styles.btn} ${styles.btnSm} ${styles.filterMenuBtn}`}
+              onClick={() => setStateMenuOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={stateMenuOpen}
+            >
+              <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+              </svg>
+              <span className={styles.filterMenuLabel}>
+                {{ all: "All", open: "Open", watching: "Watching", closed: "Closed" }[stateFilter] ?? "All"}
+              </span>
+              <svg className={styles.filterMenuChev} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m3 4.5 3 3 3-3" />
+              </svg>
+            </button>
+            {stateMenuOpen && (
+              <div className={styles.filterMenuPanel} role="listbox">
+                {[
+                  { v: "all", l: "All" },
+                  { v: "open", l: "Open" },
+                  { v: "watching", l: "Watching" },
+                  { v: "closed", l: "Closed" },
+                ].map((o) => (
+                  <button
+                    key={o.v}
+                    role="option"
+                    aria-selected={stateFilter === o.v}
+                    className={`${styles.filterMenuItem} ${stateFilter === o.v ? styles.filterMenuItemActive : ""}`}
+                    onClick={() => {
+                      setStateFilter(o.v);
+                      setStateMenuOpen(false);
+                    }}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
             onClick={() =>
               treemapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
             disabled={positions.length === 0}
+            aria-label="Treemap"
+            title="Treemap"
           >
-            Treemap
+            <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="2" y="2" width="6" height="9" />
+              <rect x="2" y="11" width="6" height="3" />
+              <rect x="8" y="2" width="6" height="5" />
+              <rect x="8" y="7" width="6" height="7" />
+            </svg>
+            <span className={styles.btnLabel}>Treemap</span>
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
             onClick={() => setCalendarDialogOpen(true)}
             disabled={positions.length === 0}
+            aria-label="Calendar"
+            title="Calendar"
           >
-            Calendar
+            <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="2" y="3" width="12" height="11" rx="1" />
+              <path d="M2 6h12M5 1.5v3M11 1.5v3" strokeLinecap="round" />
+            </svg>
+            <span className={styles.btnLabel}>Calendar</span>
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
             onClick={() => downloadCsv(filtered)}
             disabled={filtered.length === 0}
+            aria-label="Export CSV"
+            title="Export CSV"
           >
-            Export CSV
+            <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 2v8M5 7l3 3 3-3" />
+              <path d="M3 12v1.5h10V12" />
+            </svg>
+            <span className={styles.btnLabel}>Export CSV</span>
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm} ${styles.btnDanger}`}
             onClick={clearAll}
             disabled={positions.length === 0 || clearingAll}
+            aria-label={clearingAll ? "Clearing" : "Clear all"}
+            title="Clear all"
           >
-            {clearingAll ? "Clearing…" : "Clear all"}
+            <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9.5h5L11 4" />
+            </svg>
+            <span className={styles.btnLabel}>{clearingAll ? "Clearing…" : "Clear all"}</span>
           </button>
         </div>
       </div>
@@ -1134,19 +1204,39 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
             </div>
           ) : (
             groups.map((g) => {
-              const expanded =
-                expandedTickers.has(g.ticker) || search.trim().length > 0;
+              const expanded = expandedTickers.has(g.ticker);
               const pnlCls =
                 g.pnl > 0 ? styles.pnlPos : g.pnl < 0 ? styles.pnlNeg : "";
               const first = g.items[0];
-              const groupPositionLabel =
-                g.items.length === 1 && first
-                  ? first.name
-                  : `${g.items.length} positions`;
-              const groupPositionSub =
-                g.items.length === 1 && first
-                  ? `${strategySummary(g.items)} · entered ${first.entry ?? "—"}`
-                  : strategySummary(g.items);
+
+              // Single-position groups: skip the group header (it duplicates the position row).
+              // Render the PositionRow directly so click expands straight into the detail panel.
+              if (g.items.length === 1 && first) {
+                return (
+                  <PositionRow
+                    key={g.ticker}
+                    position={first}
+                    expanded={expandedId === first.id}
+                    onToggle={() =>
+                      setExpandedId(expandedId === first.id ? null : first.id)
+                    }
+                    onDelete={() => confirmAndDelete(first.id, first.name)}
+                    onClosePosition={() => closePosition(first.id, first.name)}
+                    onOpenCalculator={() => openInCalculator(first)}
+                    onOpenRepair={onOpenRepair}
+                    onCopyShare={() => copyShare(first)}
+                    tickerHighlight={
+                      highlightTicker === first.ticker &&
+                      expandedId !== first.id
+                    }
+                    onMouseEnter={() => setHighlightTicker(first.ticker)}
+                    onMouseLeave={() => setHighlightTicker(null)}
+                  />
+                );
+              }
+
+              const groupPositionLabel = `${g.items.length} positions`;
+              const groupPositionSub = strategySummary(g.items);
               return (
                 <div key={g.ticker}>
                   <div
@@ -1196,7 +1286,11 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
                         </span>
                       </div>
                       <div className={styles.monoNum}>
-                        {g.dte}d<DteBar dte={g.dte} max={g.dteMax} />
+                        <span className={dteUrgencyClass(g.dte)}>{g.dte}d</span>
+                        {g.dte !== g.dteMax && (
+                          <span className={styles.dteDate}>1st exp</span>
+                        )}
+                        <DteBar dte={g.dte} max={g.dteMax} />
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <span className={groupStateBadgeClass(g.state)}>
