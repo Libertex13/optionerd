@@ -20,7 +20,7 @@ interface PnLHeatmapProps {
 /** Maximum date columns in the heatmap (capped so very long-dated positions
  *  don't squish labels). The expiry column is always included as the last
  *  one regardless of DTE. Desktop has more horizontal room than mobile. */
-const DATE_COLUMNS_MOBILE = 7;
+const DATE_COLUMNS_MOBILE = 5;
 const DATE_COLUMNS_DESKTOP = 10;
 
 /** Number of price rows in the heatmap */
