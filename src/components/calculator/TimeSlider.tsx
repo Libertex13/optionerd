@@ -185,21 +185,6 @@ export function TimeSlider({
 
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="flex justify-between items-baseline">
-        <div>
-          <h3 className="text-lg font-bold">Payoff over time</h3>
-          <p className="text-[12.5px] text-muted-foreground mt-1 max-w-lg">
-            Drag the slider to watch the curve morph from today&apos;s
-            theoretical P&L into the expiration kink. Uses Black-Scholes with
-            current IV.
-          </p>
-        </div>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {daysToExpiry} DTE
-        </span>
-      </div>
-
       {/* Chart */}
       <div className="border border-border rounded-md overflow-hidden bg-card">
         <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Info } from "lucide-react";
 import type { Greeks } from "@/types/options";
 import { formatSignedNumber, formatCurrency } from "@/lib/utils/formatting";
 
@@ -212,19 +213,25 @@ export function GreeksDisplay({
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-px overflow-hidden rounded-md border border-border bg-border">
+      <div className="relative grid grid-cols-5 gap-px overflow-hidden rounded-md border border-border bg-border">
         {(Object.entries(greeks) as [keyof Greeks, number][]).map(([name, value]) => (
           <div key={name} className="bg-card px-3 py-2">
             <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               {name}
             </div>
-            <div className="mt-0.5 font-mono text-sm font-bold">
-              {name === "theta" || name === "vega" || name === "rho"
-                ? formatCurrency(value)
-                : formatSignedNumber(value, 4)}
+            <div className="mt-0.5 font-mono text-sm font-bold tabular-nums">
+              {formatSignedNumber(value, 2)}
             </div>
           </div>
         ))}
+        <button
+          type="button"
+          aria-label="Greek values are rounded to two decimals"
+          title="Values rounded to two decimals. Theta, vega and rho are dollar amounts (per day, per 1% IV, per 1% rate)."
+          className="absolute right-1 top-1 z-10 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/70 hover:text-foreground"
+        >
+          <Info className="h-3 w-3" strokeWidth={2} />
+        </button>
       </div>
     </div>
   );
@@ -243,7 +250,7 @@ function MetricCell({
 }) {
   return (
     <div className="bg-card px-3 py-2.5">
-      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+      <div className="min-h-7 text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
         {label}
       </div>
       <div className={`mt-0.5 font-mono text-lg font-bold ${className ?? ""}`}>

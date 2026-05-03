@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-3 py-6">
       {/* Hero */}
-      <section className="mb-8">
+      <section className="mb-4 md:mb-8">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
           Options Profit Calculator
         </h1>
@@ -19,18 +19,20 @@ export default function HomePage() {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {[
-            { href: "/calculator/long-call", label: "Long Call" },
-            { href: "/calculator/long-put", label: "Long Put" },
-            { href: "/calculator/covered-call", label: "Covered Call" },
-            { href: "/calculator/bull-call-spread", label: "Bull Call Spread" },
-            { href: "/calculator/iron-condor", label: "Iron Condor" },
-            { href: "/calculator/long-straddle", label: "Straddle" },
-            { href: "/calculator/iron-butterfly", label: "Iron Butterfly" },
-          ].map(({ href, label }) => (
+            { href: "/calculator/long-call", label: "Long Call", mobile: true },
+            { href: "/calculator/long-put", label: "Long Put", mobile: true },
+            { href: "/calculator/covered-call", label: "Covered Call", mobile: true },
+            { href: "/calculator/bull-call-spread", label: "Bull Call Spread", mobile: false },
+            { href: "/calculator/iron-condor", label: "Iron Condor", mobile: false },
+            { href: "/calculator/long-straddle", label: "Straddle", mobile: false },
+            { href: "/calculator/iron-butterfly", label: "Iron Butterfly", mobile: false },
+          ].map(({ href, label, mobile }) => (
             <Link
               key={href}
               href={href}
-              className="rounded-sm border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className={`rounded-sm border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${
+                mobile ? "" : "hidden md:inline-flex"
+              }`}
             >
               {label}
             </Link>
@@ -39,7 +41,8 @@ export default function HomePage() {
             href="/strategies"
             className="rounded-sm border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
-            All strategies &rarr;
+            <span className="md:hidden">More &rarr;</span>
+            <span className="hidden md:inline">All strategies &rarr;</span>
           </Link>
         </div>
       </section>

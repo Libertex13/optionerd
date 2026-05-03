@@ -11,6 +11,8 @@ interface ShareTradeButtonProps {
   legs: SavedTradeLeg[];
   stockLeg: SavedStockLeg | null;
   className?: string;
+  /** Override the idle-state label. Defaults to "Share". */
+  label?: string;
 }
 
 export function ShareTradeButton({
@@ -19,6 +21,7 @@ export function ShareTradeButton({
   legs,
   stockLeg,
   className,
+  label: idleLabel = "Share",
 }: ShareTradeButtonProps) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
@@ -37,7 +40,7 @@ export function ShareTradeButton({
   };
 
   const Icon = copied ? Check : error ? XIcon : Share2;
-  const label = copied ? "Copied" : error ? "Failed" : "Share";
+  const label = copied ? "Copied" : error ? "Failed" : idleLabel;
   const stateClass = copied
     ? "text-green-600 dark:text-green-400"
     : error

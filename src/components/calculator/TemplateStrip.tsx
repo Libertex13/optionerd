@@ -2,6 +2,13 @@
 
 import { PayoffShape } from "./PayoffShape";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   strategyTemplates,
   templateOrder,
 } from "@/lib/strategies/templates";
@@ -15,6 +22,7 @@ export function TemplateStrip({
   activeTemplate,
   onSelectTemplate,
 }: TemplateStripProps) {
+  const activeTpl = activeTemplate ? strategyTemplates[activeTemplate] : null;
   return (
     <div className="border border-border rounded-md overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
@@ -33,7 +41,56 @@ export function TemplateStrip({
           </button>
         )}
       </div>
-      <div className="relative px-3 py-2.5">
+
+      {/* Mobile — dropdown */}
+      <div className="px-3 py-2.5 md:hidden">
+        <Select
+          value={activeTemplate ?? ""}
+          onValueChange={(v) => onSelectTemplate(v ?? "")}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Choose a strategy…">
+              {activeTpl ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-3.5 w-5 shrink-0">
+                    <PayoffShape
+                      shape={activeTpl.shape}
+                      width={24}
+                      height={14}
+                      strokeWidth={1.4}
+                    />
+                  </span>
+                  {activeTpl.label}
+                </span>
+              ) : null}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {templateOrder.map((slug) => {
+              const tpl = strategyTemplates[slug];
+              if (!tpl) return null;
+              return (
+                <SelectItem key={slug} value={slug}>
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block h-3.5 w-5 shrink-0">
+                      <PayoffShape
+                        shape={tpl.shape}
+                        width={24}
+                        height={14}
+                        strokeWidth={1.4}
+                      />
+                    </span>
+                    {tpl.label}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Desktop — chip strip */}
+      <div className="relative hidden px-3 py-2.5 md:block">
         <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
           {templateOrder.map((slug) => {
             const tpl = strategyTemplates[slug];
@@ -63,10 +120,6 @@ export function TemplateStrip({
             );
           })}
         </div>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-background to-transparent md:hidden"
-        />
       </div>
     </div>
   );

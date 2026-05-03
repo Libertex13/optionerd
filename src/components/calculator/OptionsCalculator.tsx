@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Pencil, Plus, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -185,6 +186,7 @@ export function OptionsCalculator({
   const [isLoadingChain, setIsLoadingChain] = useState(false);
   const [chainError, setChainError] = useState<string | null>(null);
   const [legs, setLegs] = useState<SelectedLeg[]>([]);
+  const [chartView, setChartView] = useState<"payoff" | "timeline" | "heatmap">("payoff");
   const [activeLegIndex, setActiveLegIndex] = useState(0);
   const [priceTarget, setPriceTarget] = useState<string>("");
   const [qtyInput, setQtyInput] = useState<string>("1");
@@ -1032,7 +1034,7 @@ export function OptionsCalculator({
   return (
     <div className="space-y-3">
       {/* Ticker Search */}
-      <Card className="overflow-visible">
+      <Card mobileFlat className="overflow-visible">
         <CardHeader>
           <CardTitle>Underlying</CardTitle>
         </CardHeader>
@@ -1067,7 +1069,7 @@ export function OptionsCalculator({
 
       {/* Empty state — preview the position shape before a ticker is chosen */}
       {!chain && !isLoadingChain && !chainError && (
-        <Card className="border-dashed">
+        <Card mobileFlat className="border-dashed">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Position</span>
@@ -1172,7 +1174,7 @@ export function OptionsCalculator({
 
       {/* Position Builder */}
       {chain && (
-        <Card>
+        <Card mobileFlat>
           <CardHeader>
             <CardTitle>Position</CardTitle>
           </CardHeader>
@@ -1414,8 +1416,28 @@ export function OptionsCalculator({
             })()}
 
             {/* Price Target */}
-            <div className="rounded-md border border-dashed border-border p-3 space-y-3">
-              <div className="flex items-center gap-2">
+            <div className="relative rounded-md border border-dashed border-border p-3 space-y-3">
+              {priceTarget && (
+                <button
+                  onClick={() => setPriceTarget("")}
+                  className="absolute right-2 top-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+              <div className="flex items-center justify-center gap-2">
+                <span
+                  title="Recommended — pin your thesis price to see exact P&L there."
+                  className="flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded-full border border-border bg-card"
+                >
+                  <Image
+                    src="/icon-dark.svg"
+                    alt=""
+                    width={14}
+                    height={14}
+                    className="invert dark:invert-0"
+                  />
+                </span>
                 <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest shrink-0">
                   Price Target
                 </Label>
@@ -1432,16 +1454,8 @@ export function OptionsCalculator({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
-                  className="h-8 flex-1 min-w-0 rounded-sm border border-input bg-transparent px-2 font-mono text-sm font-medium text-right outline-none placeholder:text-muted-foreground/40 placeholder:font-normal focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
+                  className="h-8 w-28 shrink-0 rounded-sm border border-input bg-transparent px-2 font-mono text-sm font-medium text-right outline-none placeholder:text-muted-foreground/40 placeholder:font-normal focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/30"
                 />
-                {priceTarget && (
-                  <button
-                    onClick={() => setPriceTarget("")}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
 
               {/* Target simulation: show each leg's value & P&L at target */}
@@ -1522,47 +1536,97 @@ export function OptionsCalculator({
         </Card>
       )}
 
-      {/* Payoff Diagram */}
-      {payoffData && chain && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {isMixedExpiry ? "Front-Expiry Decision View" : "Payoff at Expiration"}
-              {legs.length > 1 && (
-                <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                  ({legs.length} legs)
-                </span>
+      {/* Strategy Visualizer — tabbed Payoff / Time / Heatmap */}
+      {(() => {
+        if (!chain || !payoffData) return null;
+        const advancedAvailable = !isMixedExpiry && strategyLegs.length > 0 && maxDte > 0;
+        const effectiveView = advancedAvailable ? chartView : "payoff";
+        const tabs: { id: "payoff" | "timeline" | "heatmap"; label: string }[] = [
+          { id: "payoff", label: "At expiration" },
+          { id: "heatmap", label: "Price × date" },
+          { id: "timeline", label: "Over time" },
+        ];
+        return (
+          <Card mobileFlat>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-2">
+                {advancedAvailable ? (
+                  <div
+                    role="tablist"
+                    aria-label="Strategy chart view"
+                    className="inline-flex items-center rounded-md border border-border bg-muted/30 p-0.5"
+                  >
+                    {tabs.map((tab) => {
+                      const active = effectiveView === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setChartView(tab.id)}
+                          className={
+                            "rounded-sm px-2.5 py-1 text-xs font-semibold transition-colors " +
+                            (active
+                              ? "bg-card text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground")
+                          }
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <CardTitle>
+                    {isMixedExpiry ? "Front-Expiry Decision View" : "Payoff at Expiration"}
+                    {legs.length > 1 && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        ({legs.length} legs)
+                      </span>
+                    )}
+                  </CardTitle>
+                )}
+                {advancedAvailable && (
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {legs.length > 1 ? `${legs.length} legs · ` : ""}
+                    {maxDte} DTE
+                  </span>
+                )}
+              </div>
+              {isMixedExpiry && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedExpiryLabel} is shown as the exact front-expiry decision point. Later expiries depend on what happens here, so use the Scenario Path below to model carry-forward outcomes.
+                </p>
               )}
-            </CardTitle>
-            {isMixedExpiry && (
-              <p className="text-xs text-muted-foreground">
-                {selectedExpiryLabel} is shown as the exact front-expiry decision point. Later expiries depend on what happens here, so use the Scenario Path below to model carry-forward outcomes.
-              </p>
-            )}
-          </CardHeader>
-          <CardContent className="px-1 md:px-3">
-            <PayoffDiagram
-              data={payoffData}
-              breakEvenPoints={breakEvenPoints}
-              currentPrice={chain.underlyingPrice}
-              priceAxisLabel={isMixedExpiry ? `Underlying Price on ${selectedExpiryLabel}` : undefined}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Time Slider — payoff over time */}
-      {strategyLegs.length > 0 && chain && maxDte > 0 && !isMixedExpiry && (
-        <Card>
-          <CardContent className="px-1 pt-6 md:px-3">
-            <TimeSlider
-              legs={strategyLegs}
-              currentPrice={chain.underlyingPrice}
-              daysToExpiry={maxDte}
-            />
-          </CardContent>
-        </Card>
-      )}
+            </CardHeader>
+            <CardContent>
+              {effectiveView === "payoff" && (
+                <PayoffDiagram
+                  data={payoffData}
+                  breakEvenPoints={breakEvenPoints}
+                  currentPrice={chain.underlyingPrice}
+                  priceAxisLabel={isMixedExpiry ? `Underlying Price on ${selectedExpiryLabel}` : undefined}
+                />
+              )}
+              {effectiveView === "timeline" && (
+                <TimeSlider
+                  legs={strategyLegs}
+                  currentPrice={chain.underlyingPrice}
+                  daysToExpiry={maxDte}
+                />
+              )}
+              {effectiveView === "heatmap" && (
+                <PnLHeatmap
+                  legs={strategyLegs}
+                  currentPrice={chain.underlyingPrice}
+                  daysToExpiry={maxDte}
+                />
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {isMixedExpiry && chain && (
         <MixedExpiryScenarioPanel
@@ -1571,24 +1635,6 @@ export function OptionsCalculator({
           expiryInfo={expiryInfo}
           currentPrice={chain.underlyingPrice}
         />
-      )}
-
-      {/* P&L Heatmap */}
-      {strategyLegs.length > 0 && chain && maxDte > 0 && !isMixedExpiry && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              P&L by Price &amp; Date
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-1 md:px-3">
-            <PnLHeatmap
-              legs={strategyLegs}
-              currentPrice={chain.underlyingPrice}
-              daysToExpiry={maxDte}
-            />
-          </CardContent>
-        </Card>
       )}
 
       {/* Greeks & Summary */}

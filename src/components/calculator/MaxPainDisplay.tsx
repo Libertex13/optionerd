@@ -217,7 +217,7 @@ export function MaxPainDisplay({
 
   if (!activeExpiry || !result) {
     return (
-      <Card>
+      <Card mobileFlat>
         <CardHeader>
           <CardTitle>Max Pain</CardTitle>
         </CardHeader>
@@ -273,7 +273,7 @@ export function MaxPainDisplay({
   return (
     <div className="space-y-4">
       {/* Header card */}
-      <Card>
+      <Card mobileFlat>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center justify-between">
             <span>Max Pain Analysis</span>
@@ -397,7 +397,7 @@ export function MaxPainDisplay({
       </Card>
 
       {/* Pain by strike chart */}
-      <Card>
+      <Card mobileFlat>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Dollar Pain by Strike</CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -407,7 +407,7 @@ export function MaxPainDisplay({
         <CardContent>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={visiblePain} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
+              <ComposedChart data={visiblePain} margin={{ top: 10, right: 4, left: 0, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.4} vertical={false} />
 
                 <XAxis
@@ -429,14 +429,15 @@ export function MaxPainDisplay({
 
                 <YAxis
                   tickFormatter={(v: number) => {
-                    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-                    if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}k`;
-                    return `$${v}`;
+                    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`;
+                    if (v >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+                    return `${v}`;
                   }}
                   stroke="var(--color-muted-foreground)"
                   fontSize={11}
                   tick={{ fill: "var(--color-muted-foreground)" }}
-                  width={55}
+                  tickMargin={2}
+                  width={32}
                 />
 
                 <Tooltip content={<PainTooltip />} />
@@ -514,7 +515,7 @@ export function MaxPainDisplay({
       </Card>
 
       {/* Open Interest by strike chart */}
-      <Card>
+      <Card mobileFlat>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Open Interest by Strike</CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -524,7 +525,7 @@ export function MaxPainDisplay({
         <CardContent>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={visibleOI} margin={{ top: 10, right: 10, left: 10, bottom: 30 }}>
+              <ComposedChart data={visibleOI} margin={{ top: 10, right: 4, left: 0, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.4} vertical={false} />
 
                 <XAxis
@@ -553,7 +554,8 @@ export function MaxPainDisplay({
                   stroke="var(--color-muted-foreground)"
                   fontSize={11}
                   tick={{ fill: "var(--color-muted-foreground)" }}
-                  width={45}
+                  tickMargin={2}
+                  width={28}
                 />
 
                 <Tooltip content={<OITooltip />} />

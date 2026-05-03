@@ -213,17 +213,17 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
       <div className="overflow-x-auto">
         <table className="w-full table-fixed border-collapse font-mono text-sm">
           <colgroup>
-            <col className="w-20" />
+            <col className="w-10 md:w-16" />
           </colgroup>
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-card px-1.5 py-1 text-right text-[9px] font-medium text-muted-foreground uppercase tracking-widest">
+              <th className="sticky left-0 z-10 bg-card px-0.5 py-1 text-right text-[9px] font-medium text-muted-foreground uppercase tracking-widest md:px-2 md:text-[11px]">
                 Price
               </th>
               {dateColumns.map((col, i) => (
                 <th
                   key={i}
-                  className="px-0.5 py-1 text-center text-[9px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap"
+                  className="px-0.5 py-1 text-center text-[9px] font-medium text-muted-foreground uppercase tracking-widest whitespace-nowrap md:px-1 md:text-[11px]"
                 >
                   {col.label}
                 </th>
@@ -236,23 +236,20 @@ export function PnLHeatmap({ legs, currentPrice, daysToExpiry }: PnLHeatmapProps
               return (
                 <tr key={rowIdx}>
                   <td
-                    className={`sticky left-0 z-10 bg-card px-1.5 py-0.5 text-right text-[10px] font-medium whitespace-nowrap border-r border-border ${
+                    className={`sticky left-0 z-10 bg-card px-0.5 py-0.5 text-right text-[10px] font-medium whitespace-nowrap border-r border-border md:px-2 md:py-1.5 md:text-[12px] ${
                       isNearCurrent
                         ? "text-foreground font-bold"
                         : "text-muted-foreground"
                     }`}
                   >
-                    ${price.toFixed(2)}
-                    {isNearCurrent && (
-                      <span className="ml-0.5 text-[9px] text-primary font-semibold">&#9664;</span>
-                    )}
+                    ${price.toFixed(1)}
                   </td>
                   {grid[rowIdx].map((cell, colIdx) => {
                     const value = displayMode === "$" ? cell.pnl : cell.pct;
                     return (
                       <td
                         key={colIdx}
-                        className="px-0.5 py-0.5 text-center text-[10px] font-semibold tabular-nums"
+                        className="px-0.5 py-0.5 text-center text-[10px] font-semibold tabular-nums md:px-1 md:py-1.5 md:text-[12.5px]"
                         style={{
                           backgroundColor: cellColor(value, maxAbs),
                           color: textColor(value, maxAbs),
