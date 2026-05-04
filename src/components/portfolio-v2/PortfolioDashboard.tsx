@@ -6,14 +6,56 @@ import { LivePositions } from "./LivePositions";
 import { Scenarios } from "./Scenarios";
 import { RepairLab } from "./RepairLab";
 import { ImportDialog } from "./ImportDialog";
+import { TradeAnalysis } from "./TradeAnalysis";
 import { usePositions } from "@/hooks/usePositions";
 import { useScenarios } from "@/hooks/useScenarios";
 import { useAuth } from "@/hooks/useAuth";
 
-type Tab = "live" | "repair" | "scenarios";
+type Tab = "live" | "analysis" | "repair" | "scenarios";
+const TRADE_ANALYSIS_ENABLED = process.env.NODE_ENV === "development";
 
 interface BrokerAccountSummary {
   institution_name?: string | null;
+}
+
+interface BrokerCashBalance {
+  broker: string;
+  broker_account_id: string;
+  account_name: string | null;
+  institution_name: string | null;
+  currency_code: string;
+  cash: number | string | null;
+  buying_power: number | string | null;
+  synced_at: string;
+}
+
+interface BrokerActivityWindow {
+  activities?: unknown;
+  transactionSync?: {
+    initial_sync_completed?: boolean;
+    last_successful_sync?: string | null;
+    first_transaction_date?: string | null;
+  } | null;
+}
+
+function activityDiagnostic(windows: BrokerActivityWindow[]): string {
+  if (windows.length === 0) return "";
+
+  const pending = windows.filter(
+    (window) => window.transactionSync?.initial_sync_completed === false,
+  );
+  if (pending.length > 0) {
+    return ` SnapTrade transaction sync is still pending for ${pending.length} account${pending.length === 1 ? "" : "s"}; try again after the initial sync completes.`;
+  }
+
+  const firstTransactionDates = windows
+    .map((window) => window.transactionSync?.first_transaction_date)
+    .filter((date): date is string => typeof date === "string" && date.length > 0);
+  if (firstTransactionDates.length > 0) {
+    return ` SnapTrade reports first known transaction date ${firstTransactionDates[0]}, but the activity query still returned empty.`;
+  }
+
+  return ` SnapTrade returned no activities for ${windows.length} account${windows.length === 1 ? "" : "s"} in the requested history window.`;
 }
 
 function PortfolioSkeleton({ message }: { message: string }) {
@@ -56,7 +98,10 @@ export function PortfolioDashboard() {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window === "undefined") return "live";
     const stored = window.localStorage.getItem("pf-tab");
-    return stored === "live" || stored === "repair" || stored === "scenarios"
+    return stored === "live" ||
+      (TRADE_ANALYSIS_ENABLED && stored === "analysis") ||
+      stored === "repair" ||
+      stored === "scenarios"
       ? stored
       : "live";
   });
@@ -64,8 +109,11 @@ export function PortfolioDashboard() {
   const [importOpen, setImportOpen] = useState(false);
   const [connectingBroker, setConnectingBroker] = useState(false);
   const [disconnectingBroker, setDisconnectingBroker] = useState(false);
+  const [syncingBrokerData, setSyncingBrokerData] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [brokerSyncMessage, setBrokerSyncMessage] = useState<string | null>(null);
   const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountSummary[]>([]);
+  const [cashBalances, setCashBalances] = useState<BrokerCashBalance[]>([]);
   const [brokerStatusLoading, setBrokerStatusLoading] = useState(false);
   const [postSyncSettling, setPostSyncSettling] = useState(false);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,10 +159,26 @@ export function PortfolioDashboard() {
     }
   }, [user]);
 
+  const refreshBrokerCash = useCallback(async () => {
+    if (!user) {
+      setCashBalances([]);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/brokerage/cash");
+      const body = await res.json().catch(() => ({}));
+      setCashBalances(res.ok && Array.isArray(body.balances) ? body.balances : []);
+    } catch {
+      setCashBalances([]);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (authLoading) return;
     void refreshBrokerStatus();
-  }, [authLoading, refreshBrokerStatus]);
+    void refreshBrokerCash();
+  }, [authLoading, refreshBrokerCash, refreshBrokerStatus]);
 
   useEffect(() => {
     return () => {
@@ -223,6 +287,44 @@ export function PortfolioDashboard() {
     }
   }
 
+  async function syncBrokerData() {
+    if (!user || !brokerConnected || syncingBrokerData) return;
+
+    setSyncingBrokerData(true);
+    setConnectError(null);
+    setBrokerSyncMessage(null);
+    try {
+      const res = await fetch("/api/brokerage/sync", {
+        method: "POST",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConnectError(body.error ?? "Brokerage sync failed");
+        return;
+      }
+
+      const balances = typeof body.balances === "number" ? body.balances : 0;
+      const activities = typeof body.activities === "number" ? body.activities : 0;
+      const zeroActivityWindows = Array.isArray(body.activityWindows)
+        ? body.activityWindows.filter(
+            (window: BrokerActivityWindow) => window.activities === 0,
+          )
+        : [];
+      const zeroActivityNote =
+        activities === 0 && zeroActivityWindows.length > 0
+          ? activityDiagnostic(zeroActivityWindows)
+          : "";
+      await refreshBrokerCash();
+      setBrokerSyncMessage(
+        `Synced ${activities} transaction${activities === 1 ? "" : "s"} and ${balances} cash balance${balances === 1 ? "" : "s"}.${zeroActivityNote}`,
+      );
+    } catch {
+      setConnectError("Brokerage sync failed");
+    } finally {
+      setSyncingBrokerData(false);
+    }
+  }
+
   async function handleImported() {
     if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
     if (settleDoneRef.current) clearTimeout(settleDoneRef.current);
@@ -252,6 +354,14 @@ export function PortfolioDashboard() {
         >
           Scenarios <span className={styles.count}>{scenarios.length}</span>
         </button>
+        {TRADE_ANALYSIS_ENABLED && (
+          <button
+            className={`${styles.tab} ${tab === "analysis" ? styles.tabActive : ""}`}
+            onClick={() => setTab("analysis")}
+          >
+            Trade Analysis
+          </button>
+        )}
         <button
           className={`${styles.tab} ${tab === "repair" ? styles.tabActive : ""}`}
           onClick={() => setTab("repair")}
@@ -276,6 +386,20 @@ export function PortfolioDashboard() {
               title={!user ? "Sign in to connect" : "Open the SnapTrade broker picker"}
             >
               {connectingBroker ? "Connecting..." : "Connect broker"}
+            </button>
+          )}
+          {brokerConnected && (
+            <button
+              className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
+              onClick={syncBrokerData}
+              disabled={!user || syncingBrokerData}
+              title={
+                !user
+                  ? "Sign in to sync"
+                  : "Sync SnapTrade activities and cash balances"
+              }
+            >
+              {syncingBrokerData ? "Syncing..." : "Sync cash & activity"}
             </button>
           )}
           {brokerConnected && (
@@ -340,7 +464,13 @@ export function PortfolioDashboard() {
             className={styles.note}
             style={{ borderLeftColor: "#ef4444", color: "#ef4444" }}
           >
-            <strong>Connection error:</strong> {connectError}
+            <strong>Brokerage error:</strong> {connectError}
+          </div>
+        )}
+
+        {brokerSyncMessage && (
+          <div className={styles.note}>
+            <strong>Brokerage sync complete.</strong> {brokerSyncMessage}
           </div>
         )}
 
@@ -365,6 +495,7 @@ export function PortfolioDashboard() {
             {tab === "live" && (
               <LivePositions
                 positions={positions}
+                cashBalances={cashBalances}
                 onRefresh={refresh}
                 onOpenRepair={() => setTab("repair")}
               />
@@ -372,6 +503,7 @@ export function PortfolioDashboard() {
             {tab === "repair" && (
               <RepairLab positions={positions} chains={chains} />
             )}
+            {TRADE_ANALYSIS_ENABLED && tab === "analysis" && <TradeAnalysis />}
             {tab === "scenarios" && (
               <Scenarios
                 positions={positions}

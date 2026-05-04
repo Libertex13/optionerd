@@ -249,8 +249,70 @@ function buildTickerGroups(
 
 interface LivePositionsProps {
   positions: PortfolioPosition[];
+  cashBalances?: BrokerCashBalance[];
   onRefresh: () => Promise<void> | void;
   onOpenRepair: () => void;
+}
+
+interface BrokerCashBalance {
+  broker: string;
+  broker_account_id: string;
+  account_name: string | null;
+  institution_name: string | null;
+  currency_code: string;
+  cash: number | string | null;
+  buying_power: number | string | null;
+  synced_at: string;
+}
+
+function moneyAmount(value: number | string | null): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function formatCurrencyAmount(value: number, currencyCode: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currencyCode,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function cashSummary(balances: BrokerCashBalance[]): {
+  value: string;
+  subtitle: string;
+} {
+  if (balances.length === 0) {
+    return { value: "—", subtitle: "sync broker cash" };
+  }
+
+  const totals = new Map<string, { cash: number; buyingPower: number }>();
+  for (const balance of balances) {
+    const currencyCode = balance.currency_code || "USD";
+    const current = totals.get(currencyCode) ?? { cash: 0, buyingPower: 0 };
+    current.cash += moneyAmount(balance.cash);
+    current.buyingPower += moneyAmount(balance.buying_power);
+    totals.set(currencyCode, current);
+  }
+
+  const entries = Array.from(totals.entries()).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const [primaryCurrency, primary] = entries[0];
+  const value =
+    entries.length === 1
+      ? formatCurrencyAmount(primary.cash, primaryCurrency)
+      : `${formatCurrencyAmount(primary.cash, primaryCurrency)} +${entries.length - 1}`;
+  const subtitle =
+    entries.length === 1
+      ? `${formatCurrencyAmount(primary.buyingPower, primaryCurrency)} buying power`
+      : `${entries.length} currencies synced`;
+
+  return { value, subtitle };
 }
 
 function stateBadgeClass(st: PositionState): string {
@@ -771,7 +833,12 @@ function PositionRow({
   );
 }
 
-export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositionsProps) {
+export function LivePositions({
+  positions,
+  cashBalances = [],
+  onRefresh,
+  onOpenRepair,
+}: LivePositionsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightTicker, setHighlightTicker] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState("all");
@@ -939,6 +1006,7 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
   const nextExpirySub = nextExpiryPos
     ? `${nextExpiryPos.ticker} · ${nextExpiryPos.strat}`
     : "no positions";
+  const cash = cashSummary(cashBalances);
 
   const pnlColorCls =
     openPnl > 0 ? styles.pnlPos : openPnl < 0 ? styles.pnlNeg : "";
@@ -980,6 +1048,11 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
             <div className={styles.sumDelta}>
               {openCount} open · {watchingCount} watching
             </div>
+          </div>
+          <div>
+            <div className={styles.sumK}>Cash</div>
+            <div className={`${styles.sumV} ${styles.mono}`}>{cash.value}</div>
+            <div className={styles.sumDelta}>{cash.subtitle}</div>
           </div>
           <div>
             <div className={styles.sumK}>Next expiry</div>

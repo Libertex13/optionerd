@@ -8,6 +8,7 @@
   max-width: 80rem; /* 1280px — matches header's max-w-7xl */
   margin: 0 auto;
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 12px 16px 0;
   border-bottom: 1px solid var(--border);
@@ -26,6 +27,8 @@
   display: flex;
   align-items: center;
   gap: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: color 0.15s, border-color 0.15s;
 }
 .tab:hover { color: var(--foreground); }
@@ -49,9 +52,12 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 10px;
   padding-bottom: 8px;
 }
+.tabsRight .btn { flex-shrink: 0; white-space: nowrap; }
 .refresh {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 11px;
@@ -59,6 +65,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .pulseDot {
   width: 6px;
@@ -413,7 +420,9 @@
 
 .summaryStrip {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  /* Skewed toward the KPI strip — it now holds 5 cards (added Cash) and needs
+     the extra width so values like "$4,308" don't wrap. */
+  grid-template-columns: 1.7fr 1fr;
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -424,37 +433,41 @@
 .sumPnl {
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 20px 22px;
+  padding: 16px 18px;
   background: var(--card);
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1.15fr 1fr 0.85fr 1fr 1fr;
+  gap: 14px;
   align-items: stretch;
+  min-width: 0;
 }
 .sumPnl > div {
   border-right: 1px solid var(--border);
-  padding-right: 20px;
+  padding-right: 14px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  min-width: 0;
 }
 .sumPnl > div:last-child { border-right: 0; padding-right: 0; }
 .sumK {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--muted-foreground);
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.13em;
+  white-space: nowrap;
 }
 .sumV {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   margin-top: 4px;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .sumDelta {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted-foreground);
   margin-top: 5px;
 }
@@ -546,6 +559,191 @@
   gap: 6px;
   align-items: center;
   flex-shrink: 0;
+}
+.pos { color: #22c55e; }
+.neg { color: #ef4444; }
+.reportHeader {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.reportHeader h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.reportHeader p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 760px;
+}
+.reportMeta {
+  margin-top: 10px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+}
+.reportActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.analysisGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.analysisMetric {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 14px 16px;
+  min-width: 0;
+}
+.analysisMetric span {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+}
+.analysisMetric strong {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 22px;
+  line-height: 1.15;
+}
+.analysisMetric em {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+}
+.chartGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.chartCard {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 14px 16px 12px;
+  min-width: 0;
+}
+.chartCard:first-child {
+  grid-column: 1 / -1;
+}
+.chartHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.chartHeader span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.chartHeader em {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-style: normal;
+}
+.chartBody {
+  height: 260px;
+}
+.chartTooltip {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 8px 10px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+.chartTooltip strong {
+  display: block;
+  margin-top: 3px;
+}
+.tradeTableWrap {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: auto;
+  background: var(--card);
+}
+.tradeTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+.tradeTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  padding: 9px 10px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+.tradeTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tradeTable tbody tr:nth-child(odd) td {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+.tradeTable tbody tr:hover td {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.tradeTable th:nth-child(4),
+.tradeTable th:nth-child(5),
+.tradeTable th:nth-child(6),
+.tradeTable th:nth-child(7),
+.tradeTable th:nth-child(8),
+.tradeTable th:nth-child(9),
+.tradeTable td:nth-child(4),
+.tradeTable td:nth-child(5),
+.tradeTable td:nth-child(6),
+.tradeTable td:nth-child(7),
+.tradeTable td:nth-child(8),
+.tradeTable td:nth-child(9) {
+  text-align: right;
+}
+@media (max-width: 900px) {
+  .reportHeader {
+    flex-direction: column;
+  }
+  .reportActions {
+    justify-content: flex-start;
+  }
+  .analysisGrid,
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+  .chartCard:first-child {
+    grid-column: auto;
+  }
 }
 .search {
   height: 36px;
@@ -1635,7 +1833,7 @@
     gap: 6px;
   }
 
-  /* Summary KPI strip — shrink everything so 4 cards fit comfortably as 2x2 */
+  /* Summary KPI strip — shrink everything so cards fit comfortably */
   .sumPnl {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
@@ -1644,14 +1842,18 @@
   .sumPnl > div {
     padding-right: 10px;
   }
-  .sumPnl > div:nth-child(2) { border-right: 0; padding-right: 0; }
+  .sumPnl > div:nth-child(2),
+  .sumPnl > div:nth-child(4) { border-right: 0; padding-right: 0; }
   .sumPnl > div:nth-child(1),
-  .sumPnl > div:nth-child(2) {
+  .sumPnl > div:nth-child(2),
+  .sumPnl > div:nth-child(3),
+  .sumPnl > div:nth-child(4) {
     border-bottom: 1px solid var(--border);
     padding-bottom: 10px;
   }
   .sumPnl > div:nth-child(3),
-  .sumPnl > div:nth-child(4) {
+  .sumPnl > div:nth-child(4),
+  .sumPnl > div:nth-child(5) {
     padding-top: 10px;
   }
   .sumK {
