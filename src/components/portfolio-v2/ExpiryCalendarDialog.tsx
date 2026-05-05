@@ -55,9 +55,9 @@ export function ExpiryCalendarDialog({
           color: "var(--card-foreground)",
           border: "1px solid var(--border)",
           borderRadius: 8,
-          width: "min(960px, 100%)",
+          width: "min(560px, 100%)",
           maxHeight: "calc(100vh - 32px)",
-          overflowY: "auto",
+          overflow: "auto",
         }}
       >
         <div
