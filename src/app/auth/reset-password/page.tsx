@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 type Status =
   | { kind: "loading" }
@@ -25,25 +26,29 @@ export default function ResetPasswordPage() {
     // session in case the listener fires before this effect mounts.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-        setStatus({ kind: "ready" });
-      }
-    });
+    } = supabase.auth.onAuthStateChange(
+      (event: string, session: Session | null) => {
+        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+          setStatus({ kind: "ready" });
+        }
+      },
+    );
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
+    supabase.auth
+      .getSession()
+      .then(({ data }: { data: { session: Session | null } }) => {
+        if (data.session) {
         setStatus((prev) => (prev.kind === "loading" ? { kind: "ready" } : prev));
-      } else {
-        // Give the SDK a beat to consume the hash; if no session arrives
-        // shortly, the link is invalid or expired.
-        setTimeout(() => {
-          setStatus((prev) =>
-            prev.kind === "loading" ? { kind: "no-session" } : prev,
-          );
-        }, 1500);
-      }
-    });
+        } else {
+          // Give the SDK a beat to consume the hash; if no session arrives
+          // shortly, the link is invalid or expired.
+          setTimeout(() => {
+            setStatus((prev) =>
+              prev.kind === "loading" ? { kind: "no-session" } : prev,
+            );
+          }, 1500);
+        }
+      });
 
     return () => subscription.unsubscribe();
   }, []);
