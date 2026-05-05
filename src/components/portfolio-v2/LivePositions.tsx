@@ -664,8 +664,20 @@ function PositionRow({
           )}
           <DteBar dte={p.dte} max={p.dteMax} />
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign: "right", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
           <span className={stateBadgeClass(p.state)}>{p.state.toUpperCase()}</span>
+          <button
+            type="button"
+            className={styles.posRowDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            aria-label={`Delete ${p.name}`}
+            title="Delete position"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -914,6 +926,13 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
   const openPnlPct = deployed > 0 ? (openPnl / deployed) * 100 : 0;
   const openCount = positions.filter((p) => p.state === "open").length;
   const watchingCount = positions.filter((p) => p.state === "watching").length;
+  // Until every non-closed position has a live mark, the aggregate P/L is
+  // computed against entry-cost fallbacks and will visibly jump when chains
+  // arrive. Treat that window as "loading" for the headline KPI.
+  const openMarkable = marked.filter((p) => p.state !== "closed");
+  const openMarkableLive = openMarkable.filter((p) => p.pxLive).length;
+  const openPnlLoading =
+    openMarkable.length > 0 && openMarkableLive < openMarkable.length;
 
   // Aggregate Greeks across live, non-closed positions. These are dollar
   // Greeks summed across the book.
@@ -940,14 +959,21 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
     ? `${nextExpiryPos.ticker} · ${nextExpiryPos.strat}`
     : "no positions";
 
-  const pnlColorCls =
-    openPnl > 0 ? styles.pnlPos : openPnl < 0 ? styles.pnlNeg : "";
+  const pnlColorCls = openPnlLoading
+    ? ""
+    : openPnl > 0
+      ? styles.pnlPos
+      : openPnl < 0
+        ? styles.pnlNeg
+        : "";
 
   const liveCount = positions.filter((p) => p.pxLive).length;
   const pnlSubtitle =
     positions.length === 0
       ? "no positions yet"
-      : `on $${deployed.toLocaleString("en-US", { maximumFractionDigits: 0 })} deployed · ${(openPnlPct >= 0 ? "+" : "") + openPnlPct.toFixed(2)}%`;
+      : openPnlLoading
+        ? `pricing ${openMarkableLive}/${openMarkable.length} positions`
+        : `on $${deployed.toLocaleString("en-US", { maximumFractionDigits: 0 })} deployed · ${(openPnlPct >= 0 ? "+" : "") + openPnlPct.toFixed(2)}%`;
 
   return (
     <section>
@@ -957,9 +983,15 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
           <div>
             <div className={styles.sumK}>Open P&amp;L</div>
             <div className={`${styles.sumV} ${pnlColorCls}`}>
-              {positions.length === 0
-                ? "—"
-                : signedDollar(openPnl, 0)}
+              {positions.length === 0 ? (
+                "—"
+              ) : openPnlLoading ? (
+                <span className={styles.sumVSkeleton} aria-busy="true" aria-label="Loading open P/L">
+                  ···
+                </span>
+              ) : (
+                signedDollar(openPnl, 0)
+              )}
             </div>
             <div className={styles.sumDelta}>{pnlSubtitle}</div>
           </div>

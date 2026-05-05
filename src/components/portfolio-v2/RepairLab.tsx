@@ -1138,7 +1138,6 @@ export function RepairLab({
     () => buildCampaignRows(campaigns, allCandidates),
     [campaigns, allCandidates],
   );
-  const expiryBuckets = useMemo(() => buildExpiryBuckets(positions), [positions]);
   const tickerOptions = useMemo(
     () => Array.from(new Set(allCandidates.map((c) => c.ticker))).sort(),
     [allCandidates],
@@ -1207,7 +1206,6 @@ export function RepairLab({
 
       <div className={css.dashGrid}>
         <div className={css.sitCard}>
-          <RiskTimeline buckets={expiryBuckets} />
           <CampaignTable
             rows={campaignRows}
             activeTicker={tickerFilter === "all" ? null : tickerFilter}

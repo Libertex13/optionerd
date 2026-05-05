@@ -6,6 +6,7 @@ import { LivePositions } from "./LivePositions";
 import { Scenarios } from "./Scenarios";
 import { RepairLab } from "./RepairLab";
 import { ImportDialog } from "./ImportDialog";
+import { NewPositionDialog } from "./NewPositionDialog";
 import { usePositions } from "@/hooks/usePositions";
 import { useScenarios } from "@/hooks/useScenarios";
 import { useAuth } from "@/hooks/useAuth";
@@ -62,6 +63,7 @@ export function PortfolioDashboard() {
   });
   const [now, setNow] = useState<number>(() => Date.now());
   const [importOpen, setImportOpen] = useState(false);
+  const [newPositionOpen, setNewPositionOpen] = useState(false);
   const [connectingBroker, setConnectingBroker] = useState(false);
   const [disconnectingBroker, setDisconnectingBroker] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -298,7 +300,9 @@ export function PortfolioDashboard() {
           </button>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
-            onClick={() => { window.location.href = "/"; }}
+            onClick={() => setNewPositionOpen(true)}
+            disabled={!user}
+            title={!user ? "Sign in to add positions" : "Add a new position"}
           >
             + New position
           </button>
@@ -309,6 +313,15 @@ export function PortfolioDashboard() {
         <ImportDialog
           onClose={() => setImportOpen(false)}
           onImported={handleImported}
+        />
+      )}
+
+      {newPositionOpen && (
+        <NewPositionDialog
+          onClose={() => setNewPositionOpen(false)}
+          onCreated={async () => {
+            await refresh();
+          }}
         />
       )}
 
