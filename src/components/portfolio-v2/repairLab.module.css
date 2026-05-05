@@ -893,6 +893,7 @@
   margin-bottom: 6px;
 }
 .miniBubble .lbl svg { width: 14px; height: 11px; color: var(--foreground); }
+.miniBubble svg { width: 14px; height: auto; flex-shrink: 0; color: var(--foreground); }
 
 .greeksCmp {
   display: grid;
