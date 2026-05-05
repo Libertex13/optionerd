@@ -17,7 +17,6 @@ import type {
   PositionState,
 } from "@/lib/portfolio/types";
 import { MiniPayoff } from "./MiniPayoff";
-import { Treemap } from "./Treemap";
 import { ExpiryTimeline } from "./ExpiryTimeline";
 import { ExpiryCalendarDialog } from "./ExpiryCalendarDialog";
 import { buildPortfolioPositionUrl } from "@/lib/portfolio/share";
@@ -822,7 +821,6 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
       return next;
     });
   }
-  const treemapRef = useRef<HTMLDivElement>(null);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
 
   function toggleSort(key: SortKey) {
@@ -1129,23 +1127,6 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
           </div>
           <button
             className={`${styles.btn} ${styles.btnSm}`}
-            onClick={() =>
-              treemapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-            disabled={positions.length === 0}
-            aria-label="Treemap"
-            title="Treemap"
-          >
-            <svg className={styles.btnIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="2" y="2" width="6" height="9" />
-              <rect x="2" y="11" width="6" height="3" />
-              <rect x="8" y="2" width="6" height="5" />
-              <rect x="8" y="7" width="6" height="7" />
-            </svg>
-            <span className={styles.btnLabel}>Treemap</span>
-          </button>
-          <button
-            className={`${styles.btn} ${styles.btnSm}`}
             onClick={() => setCalendarDialogOpen(true)}
             disabled={positions.length === 0}
             aria-label="Calendar"
@@ -1368,15 +1349,6 @@ export function LivePositions({ positions, onRefresh, onOpenRepair }: LivePositi
             marginTop: 14,
           }}
         >
-          <div className={styles.card} ref={treemapRef}>
-            <div className={styles.cardHdr}>
-              <div className={styles.cardTitle}>Exposure treemap</div>
-              <div className={styles.cardSub}>area = capital · color = P/L</div>
-            </div>
-            <div className={styles.cardBody} style={{ padding: 0 }}>
-              <Treemap positions={positions} />
-            </div>
-          </div>
           <div className={styles.card}>
             <div className={styles.cardHdr}>
               <div className={styles.cardTitle}>Expiry timeline</div>

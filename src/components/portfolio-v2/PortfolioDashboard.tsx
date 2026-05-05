@@ -340,13 +340,7 @@ export function PortfolioDashboard() {
             <code>positions</code> and <code>scenarios</code> tables are migrated
             (see <code>supabase/add_portfolio_tables.sql</code>).
           </div>
-        ) : (
-          <div className={styles.note}>
-            <strong>Dashboard.</strong> Live Positions tracks open P/L, Greeks,
-            expiries. Scenarios stress-test your book against presets or custom
-            scenarios. Current marks use delayed market data until brokerage integration is connected.
-          </div>
-        )}
+        ) : null}
 
         {connectError && (
           <div
