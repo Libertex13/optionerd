@@ -21,10 +21,19 @@ export function Footer() {
             <Link href="/contact" className="hover:text-foreground transition-colors">
               Contact
             </Link>
+            <Link href="/disclaimer" className="hover:text-foreground transition-colors">
+              Disclaimer
+            </Link>
           </nav>
         </div>
         <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
-          For educational purposes only. Options involve risk.
+          optionerd is an analytics tool, not investment advice. Options carry significant risk
+          and may not be suitable for all investors. Calculations are theoretical and based on
+          delayed market data. See{" "}
+          <Link href="/disclaimer" className="underline underline-offset-2 hover:text-foreground">
+            full disclaimer
+          </Link>
+          .
         </p>
       </div>
     </footer>
