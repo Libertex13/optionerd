@@ -18,6 +18,9 @@ export function Footer() {
             <Link href="/calculator/covered-call" className="hover:text-foreground transition-colors">
               Covered Call
             </Link>
+            <Link href="/contact" className="hover:text-foreground transition-colors">
+              Contact
+            </Link>
           </nav>
         </div>
         <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
