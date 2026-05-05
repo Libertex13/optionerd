@@ -242,6 +242,15 @@ export function NewPositionDialog({ onClose, onCreated }: NewPositionDialogProps
             </button>
           </div>
 
+          <div className={styles.npdLegHeader}>
+            <span>Side</span>
+            <span>Qty</span>
+            <span>Type</span>
+            <span>Strike</span>
+            <span>Expiration</span>
+            <span>Premium ($/sh)</span>
+            <span aria-hidden="true" />
+          </div>
           <div className={styles.npdLegList}>
             {legs.map((leg, i) => (
               <div className={styles.npdLegRow} key={i}>
@@ -278,18 +287,21 @@ export function NewPositionDialog({ onClose, onCreated }: NewPositionDialogProps
                   <option value="call">Call</option>
                   <option value="put">Put</option>
                 </select>
-                <input
-                  type="number"
-                  step="0.5"
-                  min={0}
-                  value={leg.strike}
-                  onChange={(e) =>
-                    updateLeg(i, { strike: parseFloat(e.target.value) || 0 })
-                  }
-                  className={styles.npdInputSm}
-                  aria-label="Strike"
-                  placeholder="Strike"
-                />
+                <div className={styles.npdAffix}>
+                  <span className={styles.npdAffixSign}>$</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    value={leg.strike}
+                    onChange={(e) =>
+                      updateLeg(i, { strike: parseFloat(e.target.value) || 0 })
+                    }
+                    className={`${styles.npdInputSm} ${styles.npdInputAffix}`}
+                    aria-label="Strike"
+                    placeholder="Strike"
+                  />
+                </div>
                 <input
                   type="date"
                   value={leg.expiration_date}
@@ -299,18 +311,22 @@ export function NewPositionDialog({ onClose, onCreated }: NewPositionDialogProps
                   className={styles.npdInputSm}
                   aria-label="Expiration"
                 />
-                <input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={leg.entry_premium}
-                  onChange={(e) =>
-                    updateLeg(i, { entry_premium: parseFloat(e.target.value) || 0 })
-                  }
-                  className={styles.npdInputSm}
-                  aria-label="Entry premium"
-                  placeholder="Premium"
-                />
+                <div className={styles.npdAffix}>
+                  <span className={styles.npdAffixSign}>$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={leg.entry_premium}
+                    onChange={(e) =>
+                      updateLeg(i, { entry_premium: parseFloat(e.target.value) || 0 })
+                    }
+                    className={`${styles.npdInputSm} ${styles.npdInputAffix}`}
+                    aria-label="Entry premium per share"
+                    placeholder="0.00"
+                    title="Premium per share (multiplied by 100 × quantity for cost basis)"
+                  />
+                </div>
                 <button
                   type="button"
                   className={styles.previewRm}

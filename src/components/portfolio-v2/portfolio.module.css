@@ -1763,11 +1763,40 @@
   flex-direction: column;
   gap: 6px;
 }
-.npdLegRow {
+.npdLegHeader {
   display: grid;
-  grid-template-columns: 80px 60px 70px 90px 140px 90px 28px;
+  grid-template-columns: 80px 60px 70px 100px 140px 100px 28px;
   gap: 6px;
   align-items: center;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-foreground);
+  margin-bottom: 4px;
+}
+.npdLegRow {
+  display: grid;
+  grid-template-columns: 80px 60px 70px 100px 140px 100px 28px;
+  gap: 6px;
+  align-items: center;
+}
+.npdAffix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.npdAffixSign {
+  position: absolute;
+  left: 8px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.npdInputAffix {
+  padding-left: 18px;
+  width: 100%;
 }
 .npdSummary {
   margin-top: 14px;
@@ -1813,6 +1842,7 @@
 
 @media (max-width: 720px) {
   .npdGrid { grid-template-columns: 1fr; }
+  .npdLegHeader { display: none; }
   .npdLegRow {
     grid-template-columns: 1fr 1fr;
     gap: 6px;
