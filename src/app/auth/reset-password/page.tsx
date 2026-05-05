@@ -20,37 +20,71 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
+    let cancelled = false;
 
-    // The Supabase browser client auto-parses the recovery hash and emits a
-    // PASSWORD_RECOVERY auth event. Listen for it, and also check the current
-    // session in case the listener fires before this effect mounts.
+    async function consumeQueryToken(): Promise<boolean> {
+      if (typeof window === "undefined") return false;
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+      if (!tokenHash || type !== "recovery") return false;
+      const auth = supabase.auth as unknown as {
+        verifyOtp?: (args: {
+          token_hash: string;
+          type: "recovery";
+        }) => Promise<{ error: { message: string } | null }>;
+      };
+      if (!auth.verifyOtp) return false;
+      const { error } = await auth.verifyOtp({
+        token_hash: tokenHash,
+        type: "recovery",
+      });
+      if (cancelled) return true;
+      if (error) {
+        setStatus({ kind: "no-session" });
+        return true;
+      }
+      history.replaceState(null, "", window.location.pathname);
+      setStatus({ kind: "ready" });
+      return true;
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (event: string, session: Session | null) => {
+        if (cancelled) return;
         if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
           setStatus({ kind: "ready" });
         }
       },
     );
 
-    supabase.auth
-      .getSession()
-      .then(({ data }: { data: { session: Session | null } }) => {
-        if (data.session) {
-        setStatus((prev) => (prev.kind === "loading" ? { kind: "ready" } : prev));
-        } else {
-          // Give the SDK a beat to consume the hash; if no session arrives
-          // shortly, the link is invalid or expired.
-          setTimeout(() => {
+    consumeQueryToken().then((handled) => {
+      if (handled || cancelled) return;
+      supabase.auth
+        .getSession()
+        .then(({ data }: { data: { session: Session | null } }) => {
+          if (cancelled) return;
+          if (data.session) {
             setStatus((prev) =>
-              prev.kind === "loading" ? { kind: "no-session" } : prev,
+              prev.kind === "loading" ? { kind: "ready" } : prev,
             );
-          }, 1500);
-        }
-      });
+          } else {
+            setTimeout(() => {
+              if (cancelled) return;
+              setStatus((prev) =>
+                prev.kind === "loading" ? { kind: "no-session" } : prev,
+              );
+            }, 1500);
+          }
+        });
+    });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
