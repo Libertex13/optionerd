@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { OptionsCalculator } from "@/components/calculator/OptionsCalculator";
 import { DisclaimerNote } from "@/components/shared/DisclaimerNote";
+import { RecoveryHashRedirect } from "@/components/auth/RecoveryHashRedirect";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-3 py-6">
+      <RecoveryHashRedirect />
       {/* Hero */}
       <section className="mb-4 md:mb-8">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
