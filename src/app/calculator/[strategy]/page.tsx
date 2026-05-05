@@ -8,6 +8,7 @@ import {
 import { strategyTemplates } from "@/lib/strategies/templates";
 import { getScenariosForStrategy } from "@/lib/scenarios/registry";
 import { ScenarioPlayer } from "@/components/scenarios/ScenarioPlayer";
+import { DisclaimerNote } from "@/components/shared/DisclaimerNote";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
@@ -194,10 +195,12 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
           />
         </div>
 
+        <DisclaimerNote variant="calculator" className="mt-10" />
+
         <Separator className="my-12" />
-        <section className="text-center">
-          <h2 className="mb-4 text-xl font-bold">Explore More Strategies</h2>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+        <section>
+          <h2 className="mb-5 text-center text-xl font-bold">Explore More Strategies</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {getAllStrategySlugs()
               .filter((s) => s !== def.slug)
               .map((slug) => {
@@ -206,7 +209,7 @@ export default async function StrategyPage({ params }: StrategyPageProps) {
                   <Link
                     key={slug}
                     href={`/calculator/${slug}`}
-                    className="rounded-full border border-border px-4 py-2 text-sm hover:bg-accent transition-colors"
+                    className="rounded-md border border-border bg-card px-3 py-2.5 text-center text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-accent"
                   >
                     {s.name} Calculator
                   </Link>

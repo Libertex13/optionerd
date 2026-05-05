@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { OptionsCalculator } from "@/components/calculator/OptionsCalculator";
+import { DisclaimerNote } from "@/components/shared/DisclaimerNote";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -93,6 +94,7 @@ export default function HomePage() {
             each day. Vega shows sensitivity to changes in implied volatility.
           </p>
         </div>
+        <DisclaimerNote variant="calculator" className="pt-4 border-t border-border" />
       </section>
     </div>
   );

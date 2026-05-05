@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PortfolioDashboard } from "@/components/portfolio-v2/PortfolioDashboard";
+import { DisclaimerNote } from "@/components/shared/DisclaimerNote";
 
 export const metadata: Metadata = {
   title: "Portfolio — optioNerd",
@@ -8,5 +9,12 @@ export const metadata: Metadata = {
 };
 
 export default function PortfolioPage() {
-  return <PortfolioDashboard />;
+  return (
+    <>
+      <PortfolioDashboard />
+      <div className="mx-auto max-w-7xl px-3 pb-6">
+        <DisclaimerNote variant="portfolio" />
+      </div>
+    </>
+  );
 }
