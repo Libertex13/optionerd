@@ -9,12 +9,16 @@ let cached: Snaptrade | null = null;
 export function getSnapTrade(): Snaptrade {
   if (cached) return cached;
 
-  const clientId = process.env.SNAPTRADE_CLIENT_ID;
-  const consumerKey = process.env.SNAPTRADE_CONSUMER_KEY;
+  const clientId =
+    process.env.SNAPTRADE_CLIENT_ID_COMMERCIAL_PROD ??
+    process.env.SNAPTRADE_CLIENT_ID;
+  const consumerKey =
+    process.env.SNAPTRADE_CONSUMER_KEY_COMMERCIAL_PROD ??
+    process.env.SNAPTRADE_CONSUMER_KEY;
 
   if (!clientId || !consumerKey) {
     throw new Error(
-      "SnapTrade env vars missing: SNAPTRADE_CLIENT_ID and SNAPTRADE_CONSUMER_KEY required",
+      "SnapTrade env vars missing: set SNAPTRADE_CLIENT_ID_COMMERCIAL_PROD + SNAPTRADE_CONSUMER_KEY_COMMERCIAL_PROD (or the unsuffixed sandbox equivalents)",
     );
   }
 
